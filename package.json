@@ -1,0 +1,36 @@
+{
+  "name": "chat-app-capstone",
+  "version": "1.0.0",
+  "description": "Build a working chat application that gives users full transparency into what AI agents are doing under the hood. The app must decode and render agent execution events in real time — thinking steps, tool calls, sub-agent orchestration, parallel execution, user prompts, and artifacts.",
+  "main": "index.js",
+  "scripts": {
+    "dev:server": "tsx watch server/index.ts",
+    "dev:server:mock": "MOCK=1 tsx watch server/index.ts",
+    "test": "vitest run",
+    "capture": "tsx scripts/capture-run.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rythm18/chat-app-capstone.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Rythm18/chat-app-capstone/issues"
+  },
+  "homepage": "https://github.com/Rythm18/chat-app-capstone#readme",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.173",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "vitest": "^4.1.8"
+  }
+}

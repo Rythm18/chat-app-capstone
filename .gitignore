@@ -1,1 +1,4 @@
 .gitmodules
+reference/
+node_modules/
+runs/
