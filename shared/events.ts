@@ -79,6 +79,18 @@ export interface RunErrorBody extends BodyBase {
 // Agent (sub-agent) lifecycle
 // ---------------------------------------------------------------------------
 
+/** The orchestrator dispatched a Task whose sub-agent hasn't begun running
+ *  yet (the Task tool_use block precedes the task_started lifecycle event —
+ *  with several parallel dispatches the gap is real). `agentId` is the
+ *  PARENT node; `childId` is the new node's id. */
+export interface AgentQueuedBody extends BodyBase {
+  type: "agent_queued";
+  childId: string;
+  agentType: string;
+  description: string;
+  prompt: string;
+}
+
 /** A sub-agent was spawned. `agentId` is the PARENT node; `childId` is the
  *  new node (the spawning Task call's tool_use_id). */
 export interface AgentStartBody extends BodyBase {
@@ -209,6 +221,7 @@ export type AgentEventBody =
   | RunStartedBody
   | RunDoneBody
   | RunErrorBody
+  | AgentQueuedBody
   | AgentStartBody
   | AgentEndBody
   | ThinkingBody

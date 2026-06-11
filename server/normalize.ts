@@ -22,8 +22,13 @@ import {
 /** Tool outputs above this size are truncated before streaming to the browser. */
 const MAX_TOOL_OUTPUT_CHARS = 16_000;
 
+/** Tool names that dispatch a sub-agent. The docs call it Task; SDK 0.3.x
+ *  emits it as Agent on the wire (observed in fixtures/run-001.jsonl) —
+ *  accept both rather than assuming docs match reality. */
+const SPAWN_TOOLS = new Set(["Task", "Agent"]);
+
 /** Tools whose start is represented by a richer dedicated event instead. */
-const SUPPRESSED_TOOL_STARTS = new Set(["Task", "AskUserQuestion"]);
+const SUPPRESSED_TOOL_STARTS = new Set(["AskUserQuestion"]);
 
 interface PendingToolCall {
   agentId: string;
@@ -136,7 +141,22 @@ export class Normalizer {
             tool: block.name,
             input: block.input ?? {},
           });
-          if (!SUPPRESSED_TOOL_STARTS.has(block.name)) {
+          if (SPAWN_TOOLS.has(block.name)) {
+            // Register the spawn here, not just at task_started: if the
+            // sub-agent dies before starting, its tool_result must still
+            // close the node (agent_end), not appear as a stray tool_end.
+            this.taskSpawnIds.add(block.id);
+            // Dispatch precedes execution: the node exists as "queued" until
+            // its task_started event flips it to running.
+            events.push({
+              type: "agent_queued",
+              agentId,
+              childId: block.id,
+              agentType: String(block.input?.subagent_type ?? "agent"),
+              description: String(block.input?.description ?? ""),
+              prompt: String(block.input?.prompt ?? ""),
+            });
+          } else if (!SUPPRESSED_TOOL_STARTS.has(block.name)) {
             events.push({
               type: "tool_start",
               agentId,
