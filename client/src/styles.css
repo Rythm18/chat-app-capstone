@@ -444,6 +444,29 @@ pre {
   font-variant-numeric: tabular-nums;
 }
 
+.stop-btn {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--red);
+  border: 1px solid rgba(255, 93, 93, 0.4);
+  border-radius: 3px;
+  padding: 3px 9px;
+  margin-left: 10px;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+
+.stop-btn:hover:not(:disabled) {
+  background: var(--red-dim);
+}
+
+.stop-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .run-status-agents {
   display: flex;
   flex-wrap: wrap;

@@ -76,6 +76,13 @@ app.post("/api/sessions/:id/messages", (req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/api/sessions/:id/interrupt", (req, res) => {
+  const session = store.get(req.params.id);
+  if (!session) return res.status(404).json({ error: "unknown session" });
+  session.interrupt();
+  res.json({ ok: true });
+});
+
 app.post("/api/sessions/:id/answers", (req, res) => {
   const session = store.get(req.params.id);
   if (!session) return res.status(404).json({ error: "unknown session" });

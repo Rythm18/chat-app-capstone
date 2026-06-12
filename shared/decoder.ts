@@ -531,6 +531,9 @@ export function decode(state: ChatState, event: AgentEvent): ChatState {
           };
         }),
         ticker: null,
+        // A question can't outlive its run (e.g. run stopped while paused).
+        pendingQuestion:
+          state.pendingQuestion?.runId === event.runId ? null : state.pendingQuestion,
       };
 
     default: {

@@ -18,7 +18,7 @@
  * mention PDF/charts in too many places, so the prompt files themselves are
  * now the rewritten versions.
  */
-import { query, type AgentDefinition, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import { query, type AgentDefinition, type Query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { readFileSync } from "node:fs";
 import { join, dirname, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -90,6 +90,7 @@ class MessageQueue implements AsyncIterable<SDKUserMessage> {
 export class SdkAgentRunner implements AgentRunner {
   private queue = new MessageQueue();
   private normalizer: Normalizer;
+  private activeQuery: Query | null = null;
 
   constructor(private session: ChatSession) {
     this.normalizer = new Normalizer(session.workspaceDir);
@@ -100,6 +101,12 @@ export class SdkAgentRunner implements AgentRunner {
     this.queue.push(text);
   }
 
+  /** Stop the current turn. The session stays alive for new messages; the
+   *  SDK emits a result for the interrupted turn (-> our `done` event). */
+  async interrupt() {
+    await this.activeQuery?.interrupt();
+  }
+
   close() {
     this.queue.close();
   }
@@ -107,7 +114,7 @@ export class SdkAgentRunner implements AgentRunner {
   private async consume() {
     const session = this.session;
     try {
-      const stream = query({
+      const stream = (this.activeQuery = query({
         prompt: this.queue,
         options: {
           cwd: session.workspaceDir,
@@ -132,26 +139,35 @@ export class SdkAgentRunner implements AgentRunner {
           forwardSubagentText: true,
           includePartialMessages: true,
           permissionMode: "default",
-          canUseTool: async (toolName, input, { suggestions }) => {
-            if (toolName === "AskUserQuestion") {
-              // Suspend the agent on a promise the browser resolves. The SSE
-              // stream stays open the whole time — the run is paused, not dead.
-              const questions = parseAskUserQuestions(input);
-              const answers = await session.askUser(this.currentAskAgentId(input), questions);
-              return { behavior: "allow", updatedInput: { questions, answers } };
+          // CAUTION: if this callback throws or returns an invalid shape,
+          // the SDK falls back to DENYING the tool call — observed live as a
+          // storm of "Permission to use X has been denied" across every
+          // sub-agent. It must never crash: no risky destructuring of
+          // optional args, no extra result fields, and a fail-OPEN catch.
+          canUseTool: async (toolName, input) => {
+            try {
+              if (toolName === "AskUserQuestion") {
+                // Suspend the agent on a promise the browser resolves. The SSE
+                // stream stays open the whole time — the run is paused, not dead.
+                const questions = parseAskUserQuestions(input);
+                const answers = await session.askUser(this.currentAskAgentId(input), questions);
+                return { behavior: "allow", updatedInput: { questions, answers } };
+              }
+              // Agents sometimes pass workspace-relative paths, which the CLI
+              // resolves against the server's cwd, not the session workspace —
+              // observed live as research notes landing in the project root.
+              // Re-anchor them here so every artifact stays in the workspace.
+              return {
+                behavior: "allow",
+                updatedInput: this.anchorPaths(input as Record<string, unknown>),
+              };
+            } catch (err) {
+              console.error(`[canUseTool] handler failed for ${toolName}; allowing unmodified input:`, err);
+              return { behavior: "allow", updatedInput: input };
             }
-            // Agents sometimes pass workspace-relative paths, which the CLI
-            // resolves against the server's cwd, not the session workspace —
-            // observed live as research notes landing in the project root.
-            // Re-anchor them here so every artifact stays in the workspace.
-            return {
-              behavior: "allow",
-              updatedInput: this.anchorPaths(input as Record<string, unknown>),
-              suggestions,
-            };
           },
         },
-      });
+      }));
 
       for await (const msg of stream) {
         for (const body of this.normalizer.handle(msg)) {

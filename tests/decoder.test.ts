@@ -257,6 +257,15 @@ describe("ask_user pause/resume", () => {
     expect(state.ticker?.kind).toBe("waiting_user");
   });
 
+  it("done clears a pending question belonging to that run (stopped while paused)", () => {
+    const state = decodeAll([
+      ...askEvents,
+      ev({ type: "done", agentId: "root", status: "error", resultText: "Run stopped by user.", durationMs: 0, numTurns: 0, costUsd: null }),
+    ]);
+    expect(state.pendingQuestion).toBeNull();
+    expect(run1(state).status).toBe("failed");
+  });
+
   it("ask_user_answered resumes the run and records the answers on the step", () => {
     const state = decodeAll([
       ...askEvents,

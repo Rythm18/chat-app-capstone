@@ -73,6 +73,7 @@ CRITICAL - NEVER VIOLATE:
 6. ALWAYS wait for ALL researchers to finish before spawning the data-analyst
 7. ALWAYS wait for the data-analyst to finish before spawning the report-writer
 8. Give each researcher a SPECIFIC subtopic - don't give them the same task
+9. ONLY spawn these subagent types: researcher, data-analyst, report-writer. NEVER spawn any other agent type (no "general-purpose", no improvised types) - if a subagent fails, respawn the SAME type with adjusted instructions
 9. NEVER mention PDF, charts, or images anywhere - all deliverables are markdown files
 </delegation_rules>
 

@@ -27,6 +27,7 @@ export interface Session {
   isMock: boolean;
   sendMessage: (text: string) => Promise<void>;
   answerQuestion: (questionId: string, answers: Record<string, string>) => Promise<void>;
+  stopRun: () => Promise<void>;
   artifactUrl: (path: string) => string;
 }
 
@@ -100,11 +101,16 @@ export function useSession(): Session {
     [],
   );
 
+  const stopRun = useCallback(async () => {
+    const { sessionId } = await getOrCreateSession();
+    await post(`/api/sessions/${sessionId}/interrupt`, {});
+  }, []);
+
   const artifactUrl = useCallback(
     (path: string) =>
       `/api/sessions/${sessionIdRef.current}/artifacts?path=${encodeURIComponent(path)}`,
     [],
   );
 
-  return { state, connection, isMock, sendMessage, answerQuestion, artifactUrl };
+  return { state, connection, isMock, sendMessage, answerQuestion, stopRun, artifactUrl };
 }

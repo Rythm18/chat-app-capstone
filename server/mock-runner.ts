@@ -49,6 +49,11 @@ export class MockAgentRunner implements AgentRunner {
     void this.replay().finally(() => (this.replaying = false));
   }
 
+  /** Stop the replay; the session's interrupt fallback finalizes the run. */
+  interrupt() {
+    this.closed = true;
+  }
+
   close() {
     this.closed = true;
   }

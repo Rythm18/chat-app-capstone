@@ -119,7 +119,7 @@ function RunBlock({ run, session }: { run: Run; session: Session }) {
         {run.userMessage || "(continued)"}
       </div>
 
-      <RunStatusCard run={run} />
+      <RunStatusCard run={run} onStop={() => void session.stopRun()} />
 
       {pending && (
         <AskUserCard
@@ -165,9 +165,10 @@ function RunBlock({ run, session }: { run: Run; session: Session }) {
 }
 
 /** Live status card — the chat never looks idle while a run is in flight. */
-function RunStatusCard({ run }: { run: Run }) {
+function RunStatusCard({ run, onStop }: { run: Run; onStop: () => void }) {
   const active = run.status === "running" || run.status === "awaiting_input";
   const now = useNow(active);
+  const [stopping, setStopping] = useState(false);
   if (!active) return null;
   const agents = Object.values(run.nodes).filter((n) => n.id !== "root");
   const running = agents.filter((n) => n.status === "running").length;
@@ -180,6 +181,17 @@ function RunStatusCard({ run }: { run: Run }) {
           {run.status === "awaiting_input" ? "PAUSED — INPUT REQUESTED" : "RUN IN PROGRESS"}
         </span>
         <span className="run-status-elapsed">{elapsed(run.startedTs, null, now)}</span>
+        <button
+          className="stop-btn"
+          disabled={stopping}
+          onClick={() => {
+            setStopping(true);
+            onStop();
+          }}
+          title="Stop this run"
+        >
+          ■ {stopping ? "STOPPING…" : "STOP"}
+        </button>
       </div>
       {agents.length > 0 && (
         <div className="run-status-agents">

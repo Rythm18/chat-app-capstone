@@ -23,6 +23,8 @@ import type {
 export interface AgentRunner {
   /** Deliver a user chat message to the agent. */
   send(text: string): void;
+  /** Stop the current run; the session stays usable for new messages. */
+  interrupt(): void | Promise<void>;
   close(): void;
 }
 
@@ -44,6 +46,8 @@ export class ChatSession {
   private subscribers = new Set<ServerResponse>();
   private pendingQuestions = new Map<string, PendingQuestion>();
   private runner: AgentRunner | null = null;
+  /** Runs that have received their terminal `done` event. */
+  private doneRunIds = new Set<string>();
 
   constructor(workspaceDir: string) {
     this.id = randomUUID();
@@ -64,6 +68,44 @@ export class ChatSession {
     // before the model produces its first token.
     this.emit({ type: "run_started", agentId: "root", userMessage: text });
     this.runner.send(text);
+  }
+
+  /** Stop the in-flight run. Unparks any pending ask_user first (an agent
+   *  frozen inside canUseTool can't process the interrupt), then asks the
+   *  runner to interrupt. If the SDK's terminal result doesn't arrive
+   *  shortly, emit a synthetic `done` so the UI never spins forever. */
+  interrupt() {
+    for (const [questionId, pending] of this.pendingQuestions) {
+      this.pendingQuestions.delete(questionId);
+      this.emit({
+        type: "ask_user_answered",
+        agentId: pending.agentId,
+        questionId,
+        answers: {},
+      });
+      pending.resolve({});
+    }
+    this.emit({
+      type: "error",
+      agentId: "root",
+      message: "Run stopped by user.",
+      source: "server",
+    });
+    const runAtInterrupt = this.currentRunId;
+    void this.runner?.interrupt();
+    setTimeout(() => {
+      if (this.currentRunId === runAtInterrupt && !this.doneRunIds.has(runAtInterrupt)) {
+        this.emit({
+          type: "done",
+          agentId: "root",
+          status: "error",
+          resultText: "Run stopped by user.",
+          durationMs: 0,
+          numTurns: 0,
+          costUsd: null,
+        });
+      }
+    }, 5000).unref?.();
   }
 
   /** Resolve a pending ask_user question. Returns false if unknown id. */
@@ -99,6 +141,7 @@ export class ChatSession {
       runId: this.currentRunId,
       ts: new Date().toISOString(),
     };
+    if (event.type === "done") this.doneRunIds.add(event.runId);
     this.events.push(event);
     const frame = `id: ${event.seq}\nevent: agent_event\ndata: ${JSON.stringify(event)}\n\n`;
     for (const res of this.subscribers) {
