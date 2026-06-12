@@ -4,3 +4,5 @@ node_modules/
 runs/
 .playwright-mcp/
 /files/
+docs/ASSIGNMENT.md
+docs/screenshots/

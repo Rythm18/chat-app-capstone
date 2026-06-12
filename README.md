@@ -2,9 +2,7 @@
 
 A chat application with the engine cover off. You ask a research question; a lead agent decomposes it, pauses to ask you a scoping question, dispatches researcher sub-agents **in parallel**, then runs a data analyst and a report writer — and the UI shows every thinking step, tool call, sub-agent lifecycle, and artifact **live**, as a growing execution trace.
 
-Built on the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) for the agent-transparent chat capstone ([assignment text](docs/ASSIGNMENT.md), Domain A). The design doc is at [docs/DESIGN.md](docs/DESIGN.md).
-
-![Run paused on an agent question, trace alongside](docs/screenshots/ask-user-pause.png)
+Built on the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) for the agent-transparent chat capstone (Domain A: "Deep Analyst"). The design doc is at [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Quick start
 
@@ -113,5 +111,5 @@ client/         React UI (Vite)
 tests/          decoder unit tests + full-fixture integration tests
 fixtures/       recorded SDK runs (mock-mode input, test data)
 scripts/        capture + smoke scripts used to record fixtures
-docs/           design doc, assignment, SDK notes, screenshots
+docs/           design doc, SDK notes
 ```
