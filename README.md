@@ -2,7 +2,7 @@
 
 A chat application with the engine cover off. You ask a research question; a lead agent decomposes it, pauses to ask you a scoping question, dispatches researcher sub-agents **in parallel**, then runs a data analyst and a report writer — and the UI shows every thinking step, tool call, sub-agent lifecycle, and artifact **live**, as a growing execution trace.
 
-Built on the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) for the agent-transparent chat capstone (Domain A: "Deep Analyst"). The design doc is at [docs/DESIGN.md](docs/DESIGN.md).
+Built on the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) for the agent-transparent chat capstone (Domain A: "Deep Analyst"). A one-page design document accompanies this submission separately.
 
 ## Quick start
 
@@ -53,7 +53,7 @@ Three strictly separated layers, one shared contract:
 - **`shared/decoder.ts`** — a pure reducer `(state, event) → state` with zero framework imports. Folds the flat event stream into per-run trace trees: nodes keyed by the spawning call's `tool_use_id` (never by agent name — two parallel researchers of the same type stay distinct), ordered steps per node, streaming-text buffers, artifact dedup, ask_user pause/resume.
 - **`client/`** — React renders the decoder state. `useSession` owns the EventSource; everything else is presentation.
 
-Design decisions and their rationale are in [docs/DESIGN.md](docs/DESIGN.md); raw observations from the recorded runs are in [docs/notes/sdk-event-observations.md](docs/notes/sdk-event-observations.md).
+Raw observations from the recorded runs are in [docs/notes/sdk-event-observations.md](docs/notes/sdk-event-observations.md).
 
 ### Key mechanics
 
@@ -111,5 +111,5 @@ client/         React UI (Vite)
 tests/          decoder unit tests + full-fixture integration tests
 fixtures/       recorded SDK runs (mock-mode input, test data)
 scripts/        capture + smoke scripts used to record fixtures
-docs/           design doc, SDK notes
+docs/           SDK notes
 ```
