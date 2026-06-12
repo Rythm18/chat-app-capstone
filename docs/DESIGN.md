@@ -1,46 +1,49 @@
 # Deep Analyst: An Agent-Transparent Chat Application
 
-**Author:** Ridham Khandar · **Date:** 2026-06-12 · **Status:** Shipped
+**Author:** Ridham Khandar · **Date:** 2026-06-11
 
 ## Tenets
 
-1. **The stream is the single source of truth.** Any consumer that replays the event stream from seq 0 arrives at identical UI state. Reconnection, page refresh, and testing are all the same operation.
-2. **Decode is pure.** The event-stream-to-tree logic has zero framework imports. It is exercised identically by React and by tests.
-3. **Nothing is hardcoded to our agents.** Routing keys are tool-use ids; names, types, and descriptions are display data carried by events. A foreign agent set renders correctly (verified by accident, when a config bug let the host machine's own plugins into a run).
-4. **Design from recorded reality, not from documentation.** Every schema decision traces to a captured fixture of real SDK output. Two undocumented SDK behaviors were caught this way that docs-driven design would have missed.
-5. **The chat never lies about being busy.** From the instant a message is sent to the final brief, something on screen is moving: status pills, live elapsed timers, streaming text, an activity ticker.
+1. **The stream is the single source of truth.** Any consumer that replays the event stream from the beginning must arrive at identical UI state. If we hold this, reconnection, page refresh, and testing all become the same operation: replay.
+2. **Decode is pure.** The stream-to-tree logic will have zero framework imports, so tests and the live UI exercise the exact same code.
+3. **Nothing hardcoded to our agents.** Routing keys are tool-use ids; agent names, types, and descriptions are display data carried by events. The decoder must correctly render an agent set it has never seen.
+4. **Design from recorded reality, not documentation.** Before committing to an event schema, capture a complete real SDK run to a fixture and derive shapes from observed payloads. Docs are hints; the wire is truth.
+5. **The chat never lies about being busy.** From message-send to final brief, something on screen must always reflect live agent state.
 
 ## Problem
 
-Multi-agent systems do minutes of invisible work. A normal chat UI shows a spinner and then a wall of text — users can't see what agents are doing, whether parallelism is real, why the run paused, or where output files came from. The Claude Agent SDK exposes all of this, but as a flat stream of 30+ heterogeneous message types that must be decoded, routed to the right node of a *growing* execution tree, and rendered live without racing.
+Multi-agent systems do minutes of invisible work. A conventional chat UI shows a spinner and then a wall of text — users cannot see what agents are doing, whether parallelism is real, why a run paused, or where output files came from. The Claude Agent SDK exposes all of this, but as a flat stream of 30+ heterogeneous message types that must be decoded, routed to the correct node of a tree that *grows during the run*, and rendered live without races.
 
 ## Proposed solution
 
-A three-layer pipeline with one shared contract. The server runs the SDK and **normalizes** raw messages into 15 typed events, each stamped with a monotonic `seq` and the id of the trace-tree node it belongs to (`parent_tool_use_id`-derived). Events stream over SSE with `id = seq`, making resume-after-disconnect native `EventSource` behavior. The browser folds events through a **pure reducer** into per-run trace trees and renders them as a two-pane console: chat left, execution trace right.
+A three-layer pipeline with one shared contract. The server runs the SDK and **normalizes** raw messages into a small set (~15) of typed events, each carrying the id of the trace-tree node it belongs to (derived from `parent_tool_use_id`) and a monotonic `seq` stamped at emit time. Events stream to the browser over SSE with `id = seq`, so resuming after a disconnect is native `EventSource` behavior. The browser folds events through a **pure reducer** into per-run trace trees and renders a two-pane console: chat left, execution trace right. A recorded fixture will replay through this same production pipeline as a mock mode, so the frontend can be built and demoed with zero API spend.
 
 The four key design questions:
 
-- **Single message or multiple?** Multiple. Each user message opens a *run* with its own trace tree under the same session; older runs auto-collapse to a summary line. The SDK session persists across runs, so follow-ups keep context.
-- **How do parallel agents appear?** Sub-agent nodes are keyed by the spawning call's `tool_use_id`, so two simultaneous `researcher` agents are distinct nodes ("researcher #1/#2"). Children whose lifetimes overlap are grouped into a wave rendered **side-by-side** under a `∥ PARALLEL ×N` badge. Grouping is computed from start/end timestamps — it survives completion, replay, and reconnect rather than depending on live status.
-- **What happens during ask_user?** The SDK's `canUseTool` callback parks the agent on a server-side promise — the SSE stream stays open, simply quiet. The UI flips run and node to `awaiting_input`, surfaces a question card in the chat (options + free text), and `POST /answers` resolves the promise. The trace keeps a permanent record of question and answer.
-- **How are artifacts surfaced?** The normalizer derives `artifact` events from successful `Write` results — no agent cooperation required. The decoder dedupes by path (latest write wins) and attributes each artifact to its producing agent. The final brief is detected (reports directory heuristic) and rendered **inline in the chat** as the run's deliverable; other artifacts are chips opening a viewer. Files are served only from the session's workspace, path-traversal guarded.
+- **Single message or multiple?** Multiple. Each user message opens a *run* with its own trace tree inside one persistent session; older runs collapse to a summary line. The alternative — one accumulated tree per session — is simpler state, but follow-up questions would interleave into the same tree and history would become unreadable.
+- **How do parallel agents appear?** Sub-agent nodes are keyed by the spawning call's `tool_use_id`, so two simultaneous agents of the same type stay distinct ("researcher #1/#2"). Children whose lifetimes overlap render **side-by-side** under a `∥ PARALLEL` badge. Grouping will be computed from recorded start/end timestamps rather than live status flags, so the parallel shape survives completion, refresh, and replay. A Gantt/swimlane view was considered and rejected: heavier to build and worse for showing nested step detail.
+- **What happens during ask_user?** The SDK's `canUseTool` permission callback parks the agent on a server-side promise: we emit an `ask_user` event, and simply do not return until the browser POSTs an answer. The SSE connection stays open but quiet — there is nothing to close, so the close-the-stream pitfall cannot occur. The UI flips run and node to `awaiting_input` and surfaces a question card in the chat; the answer is injected into the tool result and the trace keeps a permanent Q&A record.
+- **How are artifacts surfaced?** Derived, not declared: the normalizer turns every successful `Write` tool result into an `artifact` event — no agent cooperation required. The decoder dedupes by path (latest write wins) and attributes each artifact to its producing agent. The final brief renders inline in the chat as the run's deliverable; other artifacts are chips opening a viewer, served only from the session's workspace with path-traversal guarding. The alternative — prompting agents to announce their outputs — was rejected as unreliable.
 
 ## Goals
 
-- All ten must-have requirements, with decode correctness proven by tests: 18 unit tests (routing, clobber-resistance, pause/resume) plus an integration test replaying a full 468-event recorded run through the real normalizer and decoder.
-- Real-run verified: parallel researchers, deterministic scoping question, artifacts, inline brief.
-- Zero-cost development loop: a recorded fixture replays through the production pipeline, including an interactive ask_user pause.
+- All ten must-have requirements, with decode correctness provable: unit tests per event type (routing, parallel clobber-resistance, pause/resume) plus an integration test that replays the captured fixture end-to-end and asserts the resulting tree.
+- ask_user pause/resume working end-to-end without dropping the stream.
+- Parallel visibly distinct from sequential — including after the run completes.
+- A zero-cost development loop (fixture replay); live mode as a config flip, not a code change.
+- Stretch, time permitting: resume-on-reconnect, auto-collapse of completed nodes, multi-run stacking, an activity ticker.
 
 ## Non-goals
 
-- Persistence across server restarts (page refresh is supported via stream replay; durable storage is stretch #16 and out of scope).
-- Multi-user auth, deployment hardening, or horizontal scale — single-machine demo.
-- Agent quality tuning beyond what transparency demands (the rubric grades the chat application, not the research).
-- Executing agent-generated code (sub-agents deliberately have no Bash).
+- Persistence across server restarts (page refresh must work via stream replay; durable storage is stretch scope).
+- Multi-user auth, deployment hardening, horizontal scale — this is a single-machine demo.
+- Agent research quality beyond what transparency demands; the rubric grades the chat application.
+- Executing agent-generated code (sub-agents get no Bash, by design).
 
 ## Open questions
 
-- **SDK drift.** Two behaviors we depend on were learned from the binary, not docs (the `Agent` wire-name for spawns; the sub-agent report-write guardrail). Version upgrades need a fixture re-capture to re-verify.
-- **Thinking verbosity.** We render all forwarded thinking text; long runs may want a server-side policy (truncate, summarize, or sample) rather than a UI scrollbar.
-- **Queued fidelity.** `agent_queued` derives from dispatch-before-start ordering. If a future SDK starts tasks atomically with dispatch, the queued state quietly disappears — harmless, but the status legend would overpromise.
-- **ask_user from sub-agents.** Questions are currently attributed to the orchestrator, correct for this agent set. If sub-agents gained the tool, attribution needs the question's originating context — the schema already carries it, the runner does not yet.
+- **Can "queued" be honest?** If the SDK emits the Task dispatch before the sub-agent actually starts, that gap yields a true queued state; if starts are atomic with dispatch, a queued indicator would overpromise. Resolve by inspecting the captured fixture.
+- **How faithful are the docs to the wire?** Event shapes, field names, and tool names may differ from documentation across SDK versions. Mitigation is tenet 4 — fixture-first design — but version upgrades will need a re-capture.
+- **Thinking-text volume.** Rendering all forwarded thinking is the product's point, but long runs may need a server-side policy (truncate, sample, or summarize) rather than a UI scrollbar.
+- **ask_user from sub-agents.** Our agent set gives the question tool only to the orchestrator. The event schema should carry the asking node's id from day one so that, if sub-agents ever gain the tool, only the runner needs to change.
+- **Live-run budget.** Real runs cost real money and rate-limit headroom; development must lean on replay, with live runs reserved for verification milestones.
