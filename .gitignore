@@ -3,3 +3,4 @@ reference/
 node_modules/
 runs/
 .playwright-mcp/
+/files/

@@ -20,7 +20,7 @@
  */
 import { query, type AgentDefinition, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Normalizer, parseAskUserQuestions } from "./normalize.js";
 import type { ChatSession, AgentRunner } from "./sessions.js";
@@ -140,7 +140,15 @@ export class SdkAgentRunner implements AgentRunner {
               const answers = await session.askUser(this.currentAskAgentId(input), questions);
               return { behavior: "allow", updatedInput: { questions, answers } };
             }
-            return { behavior: "allow", updatedInput: input, suggestions };
+            // Agents sometimes pass workspace-relative paths, which the CLI
+            // resolves against the server's cwd, not the session workspace —
+            // observed live as research notes landing in the project root.
+            // Re-anchor them here so every artifact stays in the workspace.
+            return {
+              behavior: "allow",
+              updatedInput: this.anchorPaths(input as Record<string, unknown>),
+              suggestions,
+            };
           },
         },
       });
@@ -164,5 +172,17 @@ export class SdkAgentRunner implements AgentRunner {
    *  no access to it), so questions always belong to the root node. */
   private currentAskAgentId(_input: unknown): string {
     return "root";
+  }
+
+  /** Resolve relative path-like tool inputs against the session workspace. */
+  private anchorPaths(input: Record<string, unknown>): Record<string, unknown> {
+    const out = { ...input };
+    for (const key of ["file_path", "path"]) {
+      const value = out[key];
+      if (typeof value === "string" && value.length > 0 && !isAbsolute(value)) {
+        out[key] = join(this.session.workspaceDir, value);
+      }
+    }
+    return out;
   }
 }
