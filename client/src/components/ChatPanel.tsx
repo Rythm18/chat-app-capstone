@@ -7,6 +7,7 @@ import { AskUserCard } from "./AskUserCard";
 import { ArtifactChips } from "./Artifacts";
 import { StatusDot } from "./StatusDot";
 import { elapsed } from "../format";
+import { useNow } from "../useNow";
 
 const SAMPLE_PROMPTS = [
   "Research the AI agent framework market in 2026",
@@ -145,7 +146,9 @@ function RunBlock({ run, session }: { run: Run; session: Session }) {
 
 /** Live status card — the chat never looks idle while a run is in flight. */
 function RunStatusCard({ run }: { run: Run }) {
-  if (run.status === "completed" || run.status === "failed") return null;
+  const active = run.status === "running" || run.status === "awaiting_input";
+  const now = useNow(active);
+  if (!active) return null;
   const agents = Object.values(run.nodes).filter((n) => n.id !== "root");
   const running = agents.filter((n) => n.status === "running").length;
 
@@ -156,7 +159,7 @@ function RunStatusCard({ run }: { run: Run }) {
         <span className="run-status-label">
           {run.status === "awaiting_input" ? "PAUSED — INPUT REQUESTED" : "RUN IN PROGRESS"}
         </span>
-        <span className="run-status-elapsed">{elapsed(run.startedTs, null)}</span>
+        <span className="run-status-elapsed">{elapsed(run.startedTs, null, now)}</span>
       </div>
       {agents.length > 0 && (
         <div className="run-status-agents">

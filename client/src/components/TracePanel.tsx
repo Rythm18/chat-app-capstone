@@ -4,6 +4,7 @@ import type { Session } from "../useSession";
 import { TraceNodeBody } from "./TraceNode";
 import { StatusDot } from "./StatusDot";
 import { elapsed } from "../format";
+import { useNow } from "../useNow";
 
 /**
  * Right pane: one trace section per run (multi-run stacking). Older runs
@@ -35,6 +36,8 @@ function RunTrace({ run, index, isLatest }: { run: Run; index: number; isLatest:
   const open = override ?? isLatest; // older runs auto-collapse
   const root = run.nodes["root"];
   const agentCount = Object.keys(run.nodes).length - 1;
+  const runActive = run.status === "running" || run.status === "awaiting_input";
+  const now = useNow(runActive);
 
   return (
     <div className={`run-trace run-trace-${run.status}`}>
@@ -52,7 +55,7 @@ function RunTrace({ run, index, isLatest }: { run: Run; index: number; isLatest:
         </span>
         <span className="run-trace-meta">
           {agentCount > 0 ? `${agentCount} agents · ` : ""}
-          {elapsed(run.startedTs, run.status === "completed" || run.status === "failed" ? lastEnd(run) : null)}
+          {elapsed(run.startedTs, runActive ? null : lastEnd(run), now)}
         </span>
       </button>
       {open && root && (

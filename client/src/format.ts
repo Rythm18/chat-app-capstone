@@ -1,8 +1,10 @@
 /** Small display formatters shared across components. */
 
-export function elapsed(startIso: string | null, endIso: string | null): string {
+/** `nowMs` is the live-ticking clock from useNow; pass it for running spans
+ *  so the label counts up between stream events. */
+export function elapsed(startIso: string | null, endIso: string | null, nowMs?: number): string {
   if (!startIso) return "";
-  const end = endIso ? Date.parse(endIso) : Date.now();
+  const end = endIso ? Date.parse(endIso) : (nowMs ?? Date.now());
   const s = Math.max(0, Math.round((end - Date.parse(startIso)) / 1000));
   if (s < 60) return `${s}s`;
   return `${Math.floor(s / 60)}m ${s % 60}s`;

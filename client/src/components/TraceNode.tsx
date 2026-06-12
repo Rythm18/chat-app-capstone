@@ -4,6 +4,7 @@ import { nodeLabel } from "../../../shared/decoder";
 import { StepView, StreamingText } from "./StepView";
 import { StatusDot } from "./StatusDot";
 import { elapsed } from "../format";
+import { useNow } from "../useNow";
 
 /**
  * Recursive trace rendering.
@@ -81,8 +82,9 @@ function overlaps(a: AgentNode | undefined, b: AgentNode): boolean {
  *  click to reopen. */
 function TraceNodeCard({ run, node, depth }: { run: Run; node: AgentNode; depth: number }) {
   const [override, setOverride] = useState<boolean | null>(null);
-  const open =
-    override ?? (node.status === "running" || node.status === "awaiting_input");
+  const nodeActive = node.status === "running" || node.status === "awaiting_input";
+  const now = useNow(nodeActive);
+  const open = override ?? nodeActive;
 
   const toolCount = node.steps.filter((s) => s.kind === "tool").length;
 
@@ -96,7 +98,7 @@ function TraceNodeCard({ run, node, depth }: { run: Run; node: AgentNode; depth:
         <span className="node-meta">
           {node.status === "queued"
             ? "queued"
-            : `${toolCount > 0 ? `${toolCount} tools · ` : ""}${elapsed(node.startedTs, node.endedTs)}`}
+            : `${toolCount > 0 ? `${toolCount} tools · ` : ""}${elapsed(node.startedTs, node.endedTs, now)}`}
         </span>
       </button>
       {open && (
