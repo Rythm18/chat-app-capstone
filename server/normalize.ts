@@ -12,7 +12,7 @@
  *
  * Everything else is a pure mapping. One instance per chat session.
  */
-import { basename, isAbsolute, relative } from "node:path";
+import { basename, isAbsolute, relative, sep } from "node:path";
 import {
   ROOT_AGENT_ID,
   type AgentEventBody,
@@ -49,7 +49,15 @@ export class Normalizer {
     if (!isAbsolute(filePath)) return filePath;
     if (!this.workspaceDir) return filePath;
     const rel = relative(this.workspaceDir, filePath);
-    return rel.startsWith("..") ? filePath : rel;
+    if (!rel.startsWith("..")) return rel;
+    // Recorded fixtures carry absolute paths from the machine they were
+    // captured on; exact relativization fails everywhere else. Fall back to
+    // matching the workspace directory NAME inside the path, so replays are
+    // portable across machines.
+    const marker = sep + basename(this.workspaceDir) + sep;
+    const idx = filePath.lastIndexOf(marker);
+    if (idx !== -1) return filePath.slice(idx + marker.length);
+    return filePath;
   }
 
   /** Map a raw SDK message to zero or more normalized event bodies. */
