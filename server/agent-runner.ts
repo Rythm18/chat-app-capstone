@@ -6,14 +6,17 @@
  * follow-up user messages continue the same conversation (the SDK emits one
  * `result` message per turn, which our normalizer maps to `done`).
  *
- * Agent prompts are Anthropic's research-agent demo prompts (explicitly
- * permitted by the assignment) with three overrides appended:
- *  - lead: ask ONE scoping question via AskUserQuestion when the request is
- *    broad or ambiguous (exercises the pause/resume flow)
+ * Agent prompts are adapted from Anthropic's research-agent demo (explicitly
+ * permitted by the assignment), rewritten for this app:
+ *  - lead: must ask ONE scoping question via AskUserQuestion on the first
+ *    request of a session (exercises the pause/resume flow deterministically)
  *  - data-analyst: markdown tables instead of matplotlib charts (no Bash —
  *    we don't execute arbitrary shell on the host)
- *  - report-writer: markdown report instead of PDF (renderable in the
- *    browser artifact viewer; no reportlab dependency)
+ *  - report-writer: markdown report at files/reports/report.md instead of a
+ *    PDF (renderable in the browser artifact viewer; no reportlab dependency)
+ * Append-style overrides proved insufficient live — the demo's base prompts
+ * mention PDF/charts in too many places, so the prompt files themselves are
+ * now the rewritten versions.
  */
 import { query, type AgentDefinition, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { readFileSync } from "node:fs";
@@ -24,29 +27,6 @@ import type { ChatSession, AgentRunner } from "./sessions.js";
 
 const PROMPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "prompts");
 const prompt = (file: string) => readFileSync(join(PROMPTS_DIR, file), "utf-8").trim();
-
-const LEAD_OVERRIDE = `
-
-**IMPORTANT OVERRIDES:**
-- If the research request is broad, ambiguous, or could be approached from
-  several angles, ask the user exactly ONE scoping question FIRST using the
-  AskUserQuestion tool (2-4 concrete options). Use the answer to shape the
-  subtopics. Never ask questions as plain text — only through AskUserQuestion.
-- If the request is already narrow and specific, skip the question and
-  dispatch researchers immediately.
-- Spawn researchers for distinct subtopics IN PARALLEL (multiple Task calls
-  in one turn), then data-analyst, then report-writer.`;
-
-const DATA_ANALYST_OVERRIDE = `
-
-**IMPORTANT OVERRIDE:** Do NOT generate charts and do NOT use Bash or Python.
-Write your quantitative analysis as markdown tables in files/data/data_summary.md.`;
-
-const REPORT_WRITER_OVERRIDE = `
-
-**IMPORTANT OVERRIDE:** Produce the final report as a MARKDOWN file at
-files/reports/report.md. Do NOT create a PDF. Do NOT use Bash, reportlab, or
-any Skill.`;
 
 function buildAgents(): Record<string, AgentDefinition> {
   return {
@@ -63,7 +43,7 @@ function buildAgents(): Record<string, AgentDefinition> {
         "Use AFTER all researchers complete. Reads files/research_notes/, extracts metrics " +
         "and comparisons, writes a data summary to files/data/.",
       tools: ["Glob", "Read", "Write"],
-      prompt: prompt("data_analyst.txt") + DATA_ANALYST_OVERRIDE,
+      prompt: prompt("data_analyst.txt"),
       model: "haiku",
     },
     "report-writer": {
@@ -71,7 +51,7 @@ function buildAgents(): Record<string, AgentDefinition> {
         "Use LAST, after research and data analysis. Reads all notes and summaries, " +
         "synthesizes the final research brief at files/reports/report.md.",
       tools: ["Write", "Glob", "Read"],
-      prompt: prompt("report_writer.txt") + REPORT_WRITER_OVERRIDE,
+      prompt: prompt("report_writer.txt"),
       model: "haiku",
     },
   };
@@ -132,7 +112,7 @@ export class SdkAgentRunner implements AgentRunner {
         options: {
           cwd: session.workspaceDir,
           model: "sonnet",
-          systemPrompt: prompt("lead_agent.txt") + LEAD_OVERRIDE,
+          systemPrompt: prompt("lead_agent.txt"),
           // SDK isolation mode: do NOT load the host machine's ~/.claude
           // settings. Without this, the user's installed plugins leak in as
           // Skill/Workflow tools and the lead wanders off-pipeline (observed
