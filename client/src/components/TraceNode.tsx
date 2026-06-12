@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AgentNode, Run, Step } from "../../../shared/decoder";
 import { nodeLabel } from "../../../shared/decoder";
 import { StepView, StreamingText } from "./StepView";
@@ -88,6 +88,16 @@ function TraceNodeCard({ run, node, depth }: { run: Run; node: AgentNode; depth:
 
   const toolCount = node.steps.filter((s) => s.kind === "tool").length;
 
+  // The body is a capped, self-scrolling log. While the agent runs it follows
+  // the newest step — unless the user scrolls up to inspect, which detaches
+  // the pin until they return to the bottom.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const pinnedRef = useRef(true);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el && nodeActive && pinnedRef.current) el.scrollTop = el.scrollHeight;
+  }, [nodeActive, node.steps.length, node.streaming?.text]);
+
   return (
     <div className={`node-card node-${node.status}`}>
       <button className="node-head" onClick={() => setOverride(!open)}>
@@ -102,7 +112,14 @@ function TraceNodeCard({ run, node, depth }: { run: Run; node: AgentNode; depth:
         </span>
       </button>
       {open && (
-        <div className="node-body">
+        <div
+          className="node-body"
+          ref={bodyRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 16;
+          }}
+        >
           {node.prompt && (
             <details className="node-prompt">
               <summary className="microlabel">TASK PROMPT</summary>

@@ -890,6 +890,12 @@ pre {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Capped log: long tool sequences scroll inside the card instead of
+     stretching the whole parallel column. JS pins it to the newest step
+     while the agent is running. */
+  max-height: 380px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .node-prompt summary {
