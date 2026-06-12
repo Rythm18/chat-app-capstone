@@ -6,17 +6,13 @@
  * follow-up user messages continue the same conversation (the SDK emits one
  * `result` message per turn, which our normalizer maps to `done`).
  *
- * Agent prompts are adapted from Anthropic's research-agent demo (explicitly
- * permitted by the assignment), rewritten for this app:
- *  - lead: must ask ONE scoping question via AskUserQuestion on the first
- *    request of a session (exercises the pause/resume flow deterministically)
- *  - data-analyst: markdown tables instead of matplotlib charts (no Bash —
- *    we don't execute arbitrary shell on the host)
- *  - report-writer: markdown report at files/reports/research_brief.md instead of a
- *    PDF (renderable in the browser artifact viewer; no reportlab dependency)
- * Append-style overrides proved insufficient live — the demo's base prompts
- * mention PDF/charts in too many places, so the prompt files themselves are
- * now the rewritten versions.
+ * Agent prompts (server/prompts/) are adapted from Anthropic's
+ * research-agent demo:
+ *  - lead: asks ONE scoping question via AskUserQuestion per new topic
+ *  - data-analyst: markdown tables only (no Bash — agents never execute
+ *    shell on the host)
+ *  - report-writer: markdown brief at files/reports/research_brief.md
+ *    (renderable in the browser artifact viewer)
  */
 import { query, type AgentDefinition, type Query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { readFileSync } from "node:fs";
@@ -120,11 +116,10 @@ export class SdkAgentRunner implements AgentRunner {
           cwd: session.workspaceDir,
           model: "sonnet",
           systemPrompt: prompt("lead_agent.txt"),
-          // SDK isolation mode: do NOT load the host machine's ~/.claude
-          // settings. Without this, the user's installed plugins leak in as
-          // Skill/Workflow tools and the lead wanders off-pipeline (observed
-          // live: it invoked a personal "deep-research" skill instead of
-          // spawning our researchers).
+          // SDK isolation mode: never load the host machine's ~/.claude
+          // settings. By default the SDK loads them, which surfaces the
+          // host's installed plugins as Skill/Workflow tools the lead can
+          // wander into instead of using the pipeline agents.
           settingSources: [],
           // Base tool surface for the whole session: the lead's two tools
           // plus everything the sub-agent definitions need. Each AgentDefinition
@@ -140,10 +135,9 @@ export class SdkAgentRunner implements AgentRunner {
           includePartialMessages: true,
           permissionMode: "default",
           // CAUTION: if this callback throws or returns an invalid shape,
-          // the SDK falls back to DENYING the tool call — observed live as a
-          // storm of "Permission to use X has been denied" across every
-          // sub-agent. It must never crash: no risky destructuring of
-          // optional args, no extra result fields, and a fail-OPEN catch.
+          // the SDK silently DENIES the tool call for every agent. It must
+          // never crash: no destructuring of optional args, no extra result
+          // fields, and a fail-OPEN catch.
           canUseTool: async (toolName, input) => {
             try {
               if (toolName === "AskUserQuestion") {
@@ -153,10 +147,10 @@ export class SdkAgentRunner implements AgentRunner {
                 const answers = await session.askUser(this.currentAskAgentId(input), questions);
                 return { behavior: "allow", updatedInput: { questions, answers } };
               }
-              // Agents sometimes pass workspace-relative paths, which the CLI
-              // resolves against the server's cwd, not the session workspace —
-              // observed live as research notes landing in the project root.
-              // Re-anchor them here so every artifact stays in the workspace.
+              // Agents sometimes pass workspace-relative paths, which the
+              // CLI resolves against the server's cwd rather than the
+              // session workspace. Re-anchor them so no file escapes the
+              // workspace.
               return {
                 behavior: "allow",
                 updatedInput: this.anchorPaths(input as Record<string, unknown>),
@@ -184,8 +178,8 @@ export class SdkAgentRunner implements AgentRunner {
     }
   }
 
-  /** AskUserQuestion is orchestrator-only in our agent set (sub-agents have
-   *  no access to it), so questions always belong to the root node. */
+  /** AskUserQuestion is orchestrator-only (no sub-agent has access to it),
+   *  so questions always belong to the root node. */
   private currentAskAgentId(_input: unknown): string {
     return "root";
   }

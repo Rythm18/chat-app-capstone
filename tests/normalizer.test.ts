@@ -1,5 +1,5 @@
 /**
- * Normalizer regression tests for behaviors learned from real runs:
+ * Normalizer regression tests for SDK wire behaviors:
  * artifact-path portability across machines, and the spawn tool's
  * undocumented wire name.
  */

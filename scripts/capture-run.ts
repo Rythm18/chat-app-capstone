@@ -1,5 +1,5 @@
 /**
- * Phase 0 capture: run the (ported) research agent once and record every raw
+ * Fixture capture: run the (ported) research agent once and record every raw
  * SDK message, hook firing, and canUseTool invocation to a JSONL fixture.
  *
  * The fixture is the design input for our normalized event schema and the

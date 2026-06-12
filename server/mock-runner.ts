@@ -1,7 +1,7 @@
 /**
- * MockAgentRunner: replays a recorded fixture (fixtures/run-001.jsonl, a real
- * SDK run captured in Phase 0) through the same Normalizer the live runner
- * uses. Development mode only — costs nothing, is deterministic, and still
+ * MockAgentRunner: replays a recorded fixture (fixtures/run-001.jsonl, the
+ * raw messages of a real SDK run) through the same Normalizer the live
+ * runner uses. Development mode only — costs nothing, is deterministic, and
  * exercises every code path including the interactive ask_user pause: the
  * replay genuinely blocks until the browser answers.
  *

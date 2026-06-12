@@ -23,8 +23,7 @@ import {
 const MAX_TOOL_OUTPUT_CHARS = 16_000;
 
 /** Tool names that dispatch a sub-agent. The docs call it Task; SDK 0.3.x
- *  emits it as Agent on the wire (observed in fixtures/run-001.jsonl) —
- *  accept both rather than assuming docs match reality. */
+ *  emits it as Agent on the wire. Accept both. */
 const SPAWN_TOOLS = new Set(["Task", "Agent"]);
 
 /** Tools whose start is represented by a richer dedicated event instead. */

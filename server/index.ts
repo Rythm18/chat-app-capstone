@@ -7,7 +7,7 @@
  *   POST /api/sessions/:id/answers        answer an ask_user {questionId, answers}
  *   GET  /api/sessions/:id/artifacts      read an artifact {?path=files/...}
  *
- * Mock mode (no API spend, replays the Phase 0 recording): MOCK=1 npm run dev,
+ * Mock mode (no API spend, replays a recorded run): MOCK=1 npm run dev,
  * or per-session with POST /api/sessions {"mock": true}.
  */
 import express from "express";

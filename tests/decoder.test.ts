@@ -1,8 +1,8 @@
 /**
  * Decoder unit tests: every event type routes to the correct handler, and
- * nested agent contexts build the right tree shape — including the cases the
- * assignment calls out as pitfalls (parallel same-type agents, events during
- * ask_user, interleaved updates that must not clobber each other).
+ * nested agent contexts build the right tree shape — including the
+ * failure-prone cases: parallel same-type agents, events during ask_user,
+ * and interleaved updates that must not clobber each other.
  */
 import { describe, it, expect } from "vitest";
 import {

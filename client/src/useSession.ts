@@ -2,7 +2,7 @@
  * Transport hook: owns the session lifecycle and the SSE event stream, and
  * feeds every incoming event through the pure decoder.
  *
- * Separation of concerns (the architecture the assignment grades):
+ * Separation of concerns:
  *   transport (this file) -> decode (shared/decoder.ts) -> render (components)
  *
  * Reconnection model:

@@ -1,4 +1,4 @@
-/** Sanity check: run the Phase 0 fixture through the Normalizer and print
+/** Sanity check: run the recorded fixture through the Normalizer and print
  *  the event histogram, per-node routing, and tree shape. */
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
