@@ -4,7 +4,7 @@ import { nodeLabel } from "../../../shared/decoder";
 import type { Session } from "../useSession";
 import { Markdown } from "./Markdown";
 import { AskUserCard } from "./AskUserCard";
-import { ArtifactChips } from "./Artifacts";
+import { ArtifactChips, ReportPanel } from "./Artifacts";
 import { StatusDot } from "./StatusDot";
 import { elapsed } from "../format";
 import { useNow } from "../useNow";
@@ -131,6 +131,7 @@ function RunBlock({ run, session }: { run: Run; session: Session }) {
             </span>
           </div>
           <Markdown text={run.resultText} />
+          <ReportPanel run={run} session={session} />
           <ArtifactChips run={run} session={session} />
         </div>
       )}

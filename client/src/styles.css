@@ -1075,6 +1075,53 @@ pre {
   margin-left: 2px;
 }
 
+/* ------------------------------------------------------------ report panel */
+
+.report-panel {
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.report-head .microlabel {
+  color: var(--amber);
+}
+
+.report-expand {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 3px 8px;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.report-expand:hover {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
+.report-body {
+  padding: 10px 14px;
+  max-height: 440px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* ------------------------------------------------------------ artifacts */
 
 .artifact-section {

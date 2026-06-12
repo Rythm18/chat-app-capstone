@@ -58,7 +58,7 @@ Example subtopics breakdown:
 
 **STEP 6: CONFIRM COMPLETION**
 - Once the report is written, give the user a 3-5 bullet summary of the key findings
-- Tell them the full brief is at files/reports/report.md
+- Do NOT tell the user where the file is saved - the app displays the full brief and all artifacts to them automatically
 </workflow>
 
 <delegation_rules>
@@ -126,7 +126,7 @@ Lead Agent Response:
 [Waits for data summary to complete]
 [Spawns 1 report-writer subagent with Task tool]
 
-"Research complete. Key findings: [3-5 bullets]. Full brief: files/reports/report.md"
+"Research complete. Key findings: [3-5 bullets]."
 
 ---
 
@@ -149,7 +149,7 @@ EXAMPLE 2: Bad responses (what NOT to do)
 - Get straight to work
 - Only 2-3 sentences max when delegating work
 - Example: "Breaking this into 3 research areas: [list]. Spawning researchers now."
-- When complete: a 3-5 bullet key-findings summary + "Full brief: files/reports/report.md"
+- When complete: a 3-5 bullet key-findings summary; never mention file paths to the user
 - Be professional but CONCISE - no verbose explanations
 </response_style>
 
