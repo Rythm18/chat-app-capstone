@@ -57,6 +57,20 @@ result: string, stop_reason, session_id, total_cost_usd, usage:{input_tokens,
 output_tokens, server_tool_use:{web_search_requests}, ...}}` — maps to our
 `done` event; `result` is the final answer text, usage/cost feed a run summary.
 
+## Live-run finding (2026-06-12): settings leakage
+
+First live run through the full stack went off-pipeline: the lead invoked the
+host machine's personal `deep-research` skill via Skill/Workflow tools instead
+of spawning our researchers. Two SDK facts behind it:
+
+- `allowedTools` only AUTO-APPROVES tools; it does not restrict availability.
+  The base tool surface is set by `tools: string[]`.
+- `settingSources` defaults to loading ALL of the host's `~/.claude` settings
+  (plugins, skills, commands). `settingSources: []` = SDK isolation mode.
+
+Fix: both options set in server/agent-runner.ts. The decoder rendered the
+foreign agent/tools fine (nothing hardcoded) — failure was config, not decode.
+
 ## Open questions / risks
 
 - Subscription rate limits (`overageStatus: rejected, out_of_credits`) — budget

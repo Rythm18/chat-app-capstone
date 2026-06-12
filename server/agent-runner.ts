@@ -133,6 +133,17 @@ export class SdkAgentRunner implements AgentRunner {
           cwd: session.workspaceDir,
           model: "sonnet",
           systemPrompt: prompt("lead_agent.txt") + LEAD_OVERRIDE,
+          // SDK isolation mode: do NOT load the host machine's ~/.claude
+          // settings. Without this, the user's installed plugins leak in as
+          // Skill/Workflow tools and the lead wanders off-pipeline (observed
+          // live: it invoked a personal "deep-research" skill instead of
+          // spawning our researchers).
+          settingSources: [],
+          // Base tool surface for the whole session: the lead's two tools
+          // plus everything the sub-agent definitions need. Each AgentDefinition
+          // narrows its own slice; allowedTools below only controls
+          // auto-approval, not availability.
+          tools: ["Task", "AskUserQuestion", "WebSearch", "Write", "Read", "Glob"],
           allowedTools: ["Task", "AskUserQuestion"],
           agents: buildAgents(),
           maxTurns: 80,
