@@ -19,6 +19,7 @@ export function ChatPanel({ session }: { session: Session }) {
   const { state, sendMessage } = session;
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Follow the conversation as events stream in.
   useEffect(() => {
@@ -32,7 +33,14 @@ export function ChatPanel({ session }: { session: Session }) {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
     setDraft("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
     void sendMessage(trimmed);
+  };
+
+  // Grow the composer with its content, up to a cap.
+  const autosize = (el: HTMLTextAreaElement) => {
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
   };
 
   return (
@@ -52,9 +60,20 @@ export function ChatPanel({ session }: { session: Session }) {
         }}
       >
         <span className="composer-prompt">›</span>
-        <input
+        <textarea
+          ref={inputRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          rows={1}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            autosize(e.currentTarget);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit(draft);
+            }
+          }}
           placeholder={busy ? "run in progress…" : "what should we research?"}
           disabled={busy}
         />

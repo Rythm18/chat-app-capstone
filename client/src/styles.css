@@ -206,6 +206,14 @@ pre {
   display: grid;
   grid-template-columns: minmax(380px, 460px) 1fr;
   min-height: 0;
+  overflow: hidden;
+}
+
+/* Grid/flex children default to min-width:auto and refuse to shrink below
+   their content, which lets one long nowrap title push the whole page into
+   horizontal scroll. Force them shrinkable; ellipsis does the rest. */
+.panes > * {
+  min-width: 0;
 }
 
 /* ------------------------------------------------------------ ticker */
@@ -658,7 +666,7 @@ pre {
 
 .composer {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 10px;
   padding: 12px 14px;
   border-top: 1px solid var(--line);
@@ -669,16 +677,31 @@ pre {
   font-family: var(--mono);
   color: var(--amber);
   font-weight: 600;
+  padding-bottom: 8px;
 }
 
-.composer input {
+.composer textarea {
   flex: 1;
+  min-width: 0;
   padding: 9px 12px;
   font-family: var(--mono);
   font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  outline: none;
+  resize: none;
+  max-height: 120px;
+  overflow-y: auto;
 }
 
-.composer input::placeholder {
+.composer textarea:focus {
+  border-color: var(--amber);
+}
+
+.composer textarea::placeholder {
   color: var(--text-faint);
 }
 
@@ -757,6 +780,8 @@ pre {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
 }
 
 .run-trace-meta {
@@ -873,6 +898,7 @@ pre {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .node-meta {
@@ -1035,6 +1061,7 @@ pre {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .tool-elapsed {

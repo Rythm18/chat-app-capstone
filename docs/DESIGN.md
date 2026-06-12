@@ -36,8 +36,8 @@ The four key design questions:
 ## Non-goals
 
 - Persistence across server restarts (page refresh must work via stream replay; durable storage is stretch scope).
-- Multi-user auth, deployment hardening, horizontal scale — this is a single-machine demo.
-- Agent research quality beyond what transparency demands; the rubric grades the chat application.
+- Multi-user auth, deployment hardening, horizontal scale.
+- Agent research quality beyond what transparency demands.
 - Executing agent-generated code (sub-agents get no Bash, by design).
 
 ## Open questions
