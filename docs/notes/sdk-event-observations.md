@@ -71,6 +71,19 @@ of spawning our researchers. Two SDK facts behind it:
 Fix: both options set in server/agent-runner.ts. The decoder rendered the
 foreign agent/tools fine (nothing hardcoded) — failure was config, not decode.
 
+## Live-run finding (2026-06-12): subagent .md report writes are blocked
+
+The report-writer's Write to files/reports/report.md failed with a
+tool_use_error: "Subagents should return findings as text, not write report
+files." Reverse-engineered from the CLI binary — Write.validateInput blocks
+subagent writes when the BASENAME matches:
+
+    /^(REPORT|SUMMARY|FINDINGS|ANALYSIS).*\.md$/i
+
+Undocumented. Explains why Anthropic's demo emits PDFs (only .md matches).
+data_summary.md passes because SUMMARY isn't at the start. Fix: the
+deliverable is named research_brief.md.
+
 ## Open questions / risks
 
 - Subscription rate limits (`overageStatus: rejected, out_of_credits`) — budget

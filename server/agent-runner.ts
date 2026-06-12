@@ -12,7 +12,7 @@
  *    request of a session (exercises the pause/resume flow deterministically)
  *  - data-analyst: markdown tables instead of matplotlib charts (no Bash —
  *    we don't execute arbitrary shell on the host)
- *  - report-writer: markdown report at files/reports/report.md instead of a
+ *  - report-writer: markdown report at files/reports/research_brief.md instead of a
  *    PDF (renderable in the browser artifact viewer; no reportlab dependency)
  * Append-style overrides proved insufficient live — the demo's base prompts
  * mention PDF/charts in too many places, so the prompt files themselves are
@@ -49,7 +49,7 @@ function buildAgents(): Record<string, AgentDefinition> {
     "report-writer": {
       description:
         "Use LAST, after research and data analysis. Reads all notes and summaries, " +
-        "synthesizes the final research brief at files/reports/report.md.",
+        "synthesizes the final research brief at files/reports/research_brief.md.",
       tools: ["Write", "Glob", "Read"],
       prompt: prompt("report_writer.txt"),
       model: "haiku",

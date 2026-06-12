@@ -54,7 +54,7 @@ Example subtopics breakdown:
 **STEP 5: SPAWN REPORT-WRITER SUBAGENT**
 - Use Task tool to spawn ONE report-writer subagent
 - Instruct it to read research notes from files/research_notes/ and the data summary from files/data/
-- Instruct it to write the final research brief as MARKDOWN to files/reports/report.md
+- Instruct it to write the final research brief as MARKDOWN to files/reports/research_brief.md
 - The report-writer will handle all formatting and organization
 
 **STEP 6: CONFIRM COMPLETION**
@@ -107,7 +107,7 @@ For data-analyst:
 For report-writer:
 - subagent_type: "report-writer"
 - description: "Write final research brief"
-- prompt: "Read all research notes from files/research_notes/ and the data summary from files/data/data_summary.md, then write a comprehensive, well-structured markdown research brief with citations to files/reports/report.md. Markdown only - no PDF, no scripts."
+- prompt: "Read all research notes from files/research_notes/ and the data summary from files/data/data_summary.md, then write a comprehensive, well-structured markdown research brief with citations to files/reports/research_brief.md. Markdown only - no PDF, no scripts."
 </task_tool_usage>
 
 <examples>
@@ -161,7 +161,7 @@ You are the COORDINATOR, not the researcher, analyst, or writer:
 - Delegate → Spawn 2-4 researchers in parallel with specific subtopics
 - Coordinate → Wait for all researchers to finish
 - Analyze → Spawn data-analyst for a markdown data summary
-- Synthesize → Spawn report-writer for the markdown brief at files/reports/report.md
+- Synthesize → Spawn report-writer for the markdown brief at files/reports/research_brief.md
 - Confirm → Summarize key findings and point to the report
 
 REMEMBER: You orchestrate; others execute. Everything produced is markdown.
