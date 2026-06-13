@@ -5,25 +5,25 @@
    ============================================================ */
 
 :root {
-  --bg: #0a0d10;
-  --bg-panel: #0f1318;
-  --bg-inset: #0c0f13;
-  --bg-raised: #141a21;
-  --line: #1d242d;
-  --line-bright: #2a333e;
+  --bg: #f7f7f5;
+  --bg-panel: #ffffff;
+  --bg-inset: #f0f0ee;
+  --bg-raised: #f0f0ee;
+  --line: #e5e5e3;
+  --line-bright: #d8d8d5;
 
-  --text: #e9e4d6;
-  --text-dim: #939aa5;
-  --text-faint: #5b636d;
+  --text: #2d2d2d;
+  --text-dim: #6b7280;
+  --text-faint: #9ca3af;
 
-  --amber: #ffb02e;
-  --amber-dim: rgba(255, 176, 46, 0.14);
-  --green: #41d178;
-  --green-dim: rgba(65, 209, 120, 0.12);
-  --red: #ff5d5d;
-  --red-dim: rgba(255, 93, 93, 0.12);
-  --blue: #5fb4ff;
-  --gray: #6e7681;
+  --amber: #c2410c;
+  --amber-dim: rgba(194, 65, 12, 0.1);
+  --green: #16a34a;
+  --green-dim: rgba(22, 163, 74, 0.1);
+  --red: #dc2626;
+  --red-dim: rgba(220, 38, 38, 0.1);
+  --blue: #2563eb;
+  --gray: #9ca3af;
 
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --sans: "IBM Plex Sans", system-ui, sans-serif;
@@ -46,14 +46,14 @@ body {
   font-family: var(--sans);
   font-size: 14px;
   line-height: 1.55;
-  /* faint phosphor texture */
-  background-image: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(95, 180, 255, 0.04), transparent),
-    radial-gradient(ellipse 60% 50% at 90% 110%, rgba(255, 176, 46, 0.03), transparent);
+  /* faint ambient wash */
+  background-image: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(37, 99, 235, 0.03), transparent),
+    radial-gradient(ellipse 60% 50% at 90% 110%, rgba(194, 65, 12, 0.025), transparent);
 }
 
 ::selection {
-  background: var(--amber-dim);
-  color: var(--amber);
+  background: rgba(194, 65, 12, 0.16);
+  color: var(--text);
 }
 
 * {
@@ -158,8 +158,8 @@ pre {
 
 .tag-replay {
   color: var(--blue);
-  border: 1px solid rgba(95, 180, 255, 0.35);
-  background: rgba(95, 180, 255, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.08);
 }
 
 .conn {
@@ -183,7 +183,7 @@ pre {
 }
 .conn-live .conn-dot {
   background: var(--green);
-  box-shadow: 0 0 6px var(--green);
+  box-shadow: 0 0 0 3px var(--green-dim);
 }
 
 .conn-connecting {
@@ -268,7 +268,7 @@ pre {
 
 .dot-running {
   background: var(--amber);
-  box-shadow: 0 0 8px rgba(255, 176, 46, 0.7);
+  box-shadow: 0 0 0 3px var(--amber-dim);
   animation: pulse 1.4s ease-in-out infinite;
 }
 
@@ -283,7 +283,7 @@ pre {
 
 .dot-failed {
   background: var(--red);
-  box-shadow: 0 0 6px rgba(255, 93, 93, 0.6);
+  box-shadow: 0 0 0 3px var(--red-dim);
 }
 
 @keyframes pulse {
@@ -345,7 +345,6 @@ pre {
 .empty-mark {
   color: var(--amber);
   font-size: 26px;
-  text-shadow: 0 0 18px rgba(255, 176, 46, 0.5);
 }
 
 .empty-state h1 {
@@ -450,7 +449,7 @@ pre {
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--red);
-  border: 1px solid rgba(255, 93, 93, 0.4);
+  border: 1px solid rgba(220, 38, 38, 0.4);
   border-radius: 3px;
   padding: 3px 9px;
   margin-left: 10px;
@@ -487,7 +486,7 @@ pre {
 }
 
 .agent-pill-running {
-  border-color: rgba(255, 176, 46, 0.4);
+  border-color: rgba(194, 65, 12, 0.4);
   color: var(--amber);
   background: var(--amber-dim);
 }
@@ -497,7 +496,7 @@ pre {
 }
 
 .agent-pill-failed {
-  border-color: rgba(255, 93, 93, 0.4);
+  border-color: rgba(220, 38, 38, 0.4);
   color: var(--red);
 }
 
@@ -512,7 +511,7 @@ pre {
 /* ask_user card */
 
 .ask-card {
-  border: 1px solid rgba(255, 176, 46, 0.45);
+  border: 1px solid rgba(194, 65, 12, 0.4);
   border-radius: 4px;
   background: linear-gradient(var(--amber-dim), transparent 60%), var(--bg-inset);
   padding: 13px 14px;
@@ -633,7 +632,7 @@ pre {
 /* errors / result */
 
 .error-card {
-  border: 1px solid rgba(255, 93, 93, 0.4);
+  border: 1px solid rgba(220, 38, 38, 0.4);
   background: var(--red-dim);
   border-radius: 4px;
   padding: 10px 12px;
@@ -854,8 +853,8 @@ pre {
   font-weight: 600;
   letter-spacing: 0.1em;
   color: var(--blue);
-  border: 1px solid rgba(95, 180, 255, 0.35);
-  background: rgba(95, 180, 255, 0.07);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  background: rgba(37, 99, 235, 0.07);
   border-radius: 2px;
   padding: 2px 7px;
 }
@@ -866,7 +865,7 @@ pre {
 }
 
 .wave-parallel > .wave-items > .node-card {
-  border-top: 2px solid rgba(95, 180, 255, 0.4);
+  border-top: 2px solid rgba(37, 99, 235, 0.4);
 }
 
 .node-card {
@@ -985,7 +984,7 @@ pre {
 .node-result pre {
   padding: 8px 10px;
   background: var(--green-dim);
-  border: 1px solid rgba(65, 209, 120, 0.25);
+  border: 1px solid rgba(22, 163, 74, 0.25);
   border-radius: 3px;
   color: var(--text-dim);
   max-height: 200px;
@@ -1010,7 +1009,7 @@ pre {
 }
 
 .step-ask {
-  border: 1px solid rgba(255, 176, 46, 0.3);
+  border: 1px solid rgba(194, 65, 12, 0.3);
   background: var(--amber-dim);
   border-radius: 3px;
   padding: 8px 10px;
@@ -1223,7 +1222,7 @@ pre {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(4, 6, 8, 0.78);
+  background: rgba(17, 24, 39, 0.5);
   backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
@@ -1240,7 +1239,7 @@ pre {
   background: var(--bg-panel);
   border: 1px solid var(--line-bright);
   border-radius: 6px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
 }
 
 .viewer-head {
