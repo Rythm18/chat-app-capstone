@@ -35,6 +35,9 @@ interface PendingQuestion {
 
 export class ChatSession {
   readonly id: string;
+  /** Whether this session replays the fixture (mock) or runs the live SDK.
+   *  Recorded so a restored session re-attaches the right runner. */
+  readonly mock: boolean;
   /** Absolute directory agents write artifacts into (artifact downloads are
    *  served from here, and only from here). */
   workspaceDir: string;
@@ -48,14 +51,71 @@ export class ChatSession {
   private runner: AgentRunner | null = null;
   /** Runs that have received their terminal `done` event. */
   private doneRunIds = new Set<string>();
+  /** Durable sink for emitted events (disk append); null = in-memory only. */
+  private persist: ((event: AgentEvent) => void) | null = null;
 
-  constructor(workspaceDir: string) {
-    this.id = randomUUID();
+  constructor(workspaceDir: string, opts: { id?: string; mock?: boolean } = {}) {
+    this.id = opts.id ?? randomUUID();
+    this.mock = opts.mock ?? false;
     this.workspaceDir = workspaceDir;
   }
 
   attachRunner(runner: AgentRunner) {
     this.runner = runner;
+  }
+
+  hasRunner(): boolean {
+    return this.runner !== null;
+  }
+
+  /** Wire the durable event sink. Set before hydrate/emit. */
+  setPersist(fn: (event: AgentEvent) => void) {
+    this.persist = fn;
+  }
+
+  // -- persistence ----------------------------------------------------------
+
+  /** Rebuild in-memory state from a persisted event log, without
+   *  re-persisting or broadcasting (there are no subscribers yet). The seq
+   *  counter and run bookkeeping continue from where the log left off. */
+  hydrate(events: AgentEvent[]) {
+    this.events = events.slice();
+    this.seq = events.reduce((max, e) => Math.max(max, e.seq), -1) + 1;
+    let maxRun = 0;
+    for (const e of events) {
+      if (e.type === "done") this.doneRunIds.add(e.runId);
+      const m = /^run-(\d+)$/.exec(e.runId);
+      if (m) maxRun = Math.max(maxRun, Number(m[1]));
+    }
+    this.runCounter = maxRun;
+    this.currentRunId = events.length ? events[events.length - 1].runId : "run-0";
+  }
+
+  /** Runs are sequential, so at most the latest run can have been mid-flight
+   *  when the process died. If it started but never reached `done`, mark it
+   *  failed so a restored session shows no eternal spinners (and offers the
+   *  user a retry). These synthetic events persist like any other. */
+  finalizeInterruptedRuns() {
+    if (this.doneRunIds.has(this.currentRunId)) return;
+    const started = this.events.some(
+      (e) => e.runId === this.currentRunId && e.type === "run_started",
+    );
+    if (!started) return;
+    this.emit({
+      type: "error",
+      agentId: "root",
+      message: "Run interrupted by a server restart.",
+      source: "server",
+    });
+    this.emit({
+      type: "done",
+      agentId: "root",
+      status: "error",
+      resultText: "Run interrupted by a server restart.",
+      durationMs: 0,
+      numTurns: 0,
+      costUsd: null,
+    });
   }
 
   // -- inbound (from HTTP) --------------------------------------------------
@@ -143,6 +203,7 @@ export class ChatSession {
     };
     if (event.type === "done") this.doneRunIds.add(event.runId);
     this.events.push(event);
+    this.persist?.(event);
     const frame = `id: ${event.seq}\nevent: agent_event\ndata: ${JSON.stringify(event)}\n\n`;
     for (const res of this.subscribers) {
       res.write(frame);

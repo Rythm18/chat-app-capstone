@@ -18,8 +18,10 @@ import { fileURLToPath } from "node:url";
 import { ChatSession, SessionStore } from "./sessions.js";
 import { SdkAgentRunner } from "./agent-runner.js";
 import { MockAgentRunner, MOCK_WORKSPACE } from "./mock-runner.js";
+import { SessionLog, loadPersistedSessions } from "./persistence.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const DATA_DIR = join(ROOT, "data");
 const PORT = Number(process.env.PORT ?? 3001);
 const MOCK_DEFAULT = process.env.MOCK === "1";
 
@@ -29,21 +31,56 @@ app.use(express.json());
 
 const store = new SessionStore();
 
-app.post("/api/sessions", (req, res) => {
-  const mock = typeof req.body?.mock === "boolean" ? req.body.mock : MOCK_DEFAULT;
+function attachRunnerFor(session: ChatSession) {
+  session.attachRunner(
+    session.mock ? new MockAgentRunner(session) : new SdkAgentRunner(session),
+  );
+}
 
-  let session: ChatSession;
-  if (mock) {
-    session = new ChatSession(MOCK_WORKSPACE);
-    session.attachRunner(new MockAgentRunner(session));
-  } else {
-    const workspace = join(ROOT, "runs", `session-${Date.now()}`);
-    mkdirSync(join(workspace, "files"), { recursive: true });
-    session = new ChatSession(workspace);
-    session.attachRunner(new SdkAgentRunner(session));
-  }
+/** Create a fresh persisted session with a live runner attached. */
+function createSession(mock: boolean): ChatSession {
+  const workspaceDir = mock ? MOCK_WORKSPACE : join(ROOT, "runs", `session-${Date.now()}`);
+  if (!mock) mkdirSync(join(workspaceDir, "files"), { recursive: true });
+  const session = new ChatSession(workspaceDir, { mock });
+  const log = new SessionLog(DATA_DIR, {
+    id: session.id,
+    workspaceDir,
+    mock,
+    createdAt: new Date().toISOString(),
+  });
+  session.setPersist((e) => log.append(e));
+  attachRunnerFor(session);
   store.add(session);
-  res.json({ sessionId: session.id, mock });
+  return session;
+}
+
+// Restore persisted sessions on boot. Event history is rehydrated and any
+// run that was mid-flight at shutdown is finalized as interrupted. Runners
+// are attached lazily (on resume) so boot doesn't spawn idle SDK children.
+let restored = 0;
+for (const { meta, events } of loadPersistedSessions(DATA_DIR)) {
+  const session = new ChatSession(meta.workspaceDir, { id: meta.id, mock: meta.mock });
+  const log = new SessionLog(DATA_DIR, meta);
+  session.setPersist((e) => log.append(e));
+  session.hydrate(events);
+  session.finalizeInterruptedRuns();
+  store.add(session);
+  restored++;
+}
+
+app.post("/api/sessions", (req, res) => {
+  // Resume an existing session (page reload, or after a server restart).
+  const resumeId = typeof req.body?.resume === "string" ? req.body.resume : null;
+  if (resumeId) {
+    const existing = store.get(resumeId);
+    if (existing) {
+      if (!existing.hasRunner()) attachRunnerFor(existing); // wake a restored session
+      return res.json({ sessionId: existing.id, mock: existing.mock, resumed: true });
+    }
+  }
+  const mock = typeof req.body?.mock === "boolean" ? req.body.mock : MOCK_DEFAULT;
+  const session = createSession(mock);
+  res.json({ sessionId: session.id, mock, resumed: false });
 });
 
 app.get("/api/sessions/:id/stream", (req, res) => {
@@ -113,6 +150,8 @@ app.get("/api/sessions/:id/artifacts", (req, res) => {
 
 app.listen(PORT, () => {
   console.log(
-    `agent-chat server on http://localhost:${PORT} (default mode: ${MOCK_DEFAULT ? "MOCK replay" : "LIVE SDK"})`,
+    `agent-chat server on http://localhost:${PORT} ` +
+      `(default mode: ${MOCK_DEFAULT ? "MOCK replay" : "LIVE SDK"}` +
+      `${restored ? `, restored ${restored} session${restored === 1 ? "" : "s"}` : ""})`,
   );
 });

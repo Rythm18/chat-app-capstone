@@ -49,7 +49,9 @@ export function ChatPanel({ session }: { session: Session }) {
         {state.runs.length === 0 ? (
           <EmptyState onPick={submit} />
         ) : (
-          state.runs.map((run) => <RunBlock key={run.runId} run={run} session={session} />)
+          state.runs.map((run) => (
+            <RunBlock key={run.runId} run={run} session={session} busy={busy} onRetry={submit} />
+          ))
         )}
       </div>
       <form
@@ -105,7 +107,17 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   );
 }
 
-function RunBlock({ run, session }: { run: Run; session: Session }) {
+function RunBlock({
+  run,
+  session,
+  busy,
+  onRetry,
+}: {
+  run: Run;
+  session: Session;
+  busy: boolean;
+  onRetry: (text: string) => void;
+}) {
   const { state, answerQuestion } = session;
   const pending =
     state.pendingQuestion && state.pendingQuestion.runId === run.runId
@@ -156,7 +168,19 @@ function RunBlock({ run, session }: { run: Run; session: Session }) {
       )}
       {run.status === "failed" && (
         <div className="result-card result-failed">
-          <span className="microlabel">RUN FAILED</span>
+          <div className="result-head">
+            <span className="microlabel">RUN FAILED</span>
+            {run.userMessage && (
+              <button
+                className="rerun-btn"
+                disabled={busy}
+                onClick={() => onRetry(run.userMessage)}
+                title="Run this request again"
+              >
+                ↻ RERUN
+              </button>
+            )}
+          </div>
           {run.resultText && <Markdown text={run.resultText} />}
         </div>
       )}

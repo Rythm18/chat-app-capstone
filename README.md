@@ -58,19 +58,23 @@ Raw observations from the recorded runs are in [docs/notes/sdk-event-observation
 ### Key mechanics
 
 - **Resumable stream** — SSE event ids are per-session sequence numbers; `EventSource` auto-reconnect sends `Last-Event-ID`, and the server replays everything after it. A fresh page load replays from 0 and the decoder rebuilds identical state — the stream is the single source of truth.
+- **Persistence across restarts** — every emitted event is appended to `data/<id>.jsonl`; on boot the server replays each log to rebuild its sessions in memory. The browser remembers its session id (`localStorage`) and resumes it, so closing the tab or restarting the server preserves the full trace. The decoder needs zero changes — it already rebuilds from events. A run that was mid-flight at shutdown is finalized as interrupted (so no eternal spinners) and offered a retry.
 - **ask_user without closing the stream** — `AskUserQuestion` is intercepted in `canUseTool`, which parks the agent on a server-side promise. The browser shows the question card; `POST /answers` resolves the promise and the run resumes. The SSE connection never drops.
 - **Parallel visualization** — children whose lifetimes overlap (by timestamp) are grouped into a "wave" and rendered side-by-side under a `∥ PARALLEL` badge; the grouping is derived from data, so it survives completion and replay.
 - **Artifacts** — derived from successful `Write` calls, deduped by path (latest wins), attributed to the producing agent, served only from inside the session's workspace (path-traversal guarded). The final brief renders inline in the chat.
+- **Stop & retry** — a running trace shows a STOP button (`query.interrupt()`, with a synthetic terminal event as a fallback); a failed or interrupted run shows a RERUN button that re-submits the original request as a fresh run.
 
 ## Tests
 
 ```bash
-npm test        # 33 tests
+npm test        # 45 tests
 npm run typecheck
 ```
 
 - `tests/decoder.test.ts` — every event type routes correctly; parallel same-type agents stay distinct and don't clobber each other; nested events land on the right node; ask_user suspends/resumes; artifacts dedup; multi-run stacking.
 - `tests/fixture-integration.test.ts` — replays all 468 recorded events through the real server normalizer **and** the real client decoder, then asserts the final tree shape, the mid-run parallel state, sequential-after-parallel ordering, and the terminal state. If either side drifts from the shared schema, this fails.
+- `tests/normalizer.test.ts` — SDK wire quirks: artifact-path portability across machines, and the `Agent`/`Task` spawn-tool name.
+- `tests/persistence.test.ts` — the event log round-trips to disk; `hydrate` continues seq/run bookkeeping; a mid-flight run is finalized as interrupted on restore, a completed one is left untouched.
 
 ## The agents
 
@@ -95,21 +99,22 @@ Things we hit in real runs that the docs don't tell you (details in [the notes](
 
 ## Known limitations
 
-- **No persistence** — sessions and event logs are in-memory; a server restart loses them (page refresh is fine — the stream replays). Stretch goal #16 not implemented.
-- **No retry/rerun on failure** (stretch #14) — errors are surfaced clearly, but recovery is a new message.
+- **Live agent context doesn't survive a server restart.** Persistence preserves the full event history and UI trace, but the SDK child process and its conversation memory are gone. A restored session reattaches a *fresh* runner, so a follow-up message starts a new agent context (in mock mode the replay continues fine).
 - One run at a time per session; a second message queues behind the active run.
 - Artifact viewer renders markdown and plain text only (by design — the agents are prompted to produce markdown).
 - Mock mode ignores your message text — it replays what was recorded.
 - ask_user is attributed to the orchestrator; in this agent set only the lead holds the tool, so routing deeper was not needed.
+- Persistence is per-process local files (`data/`), not a shared store — fine for a single-machine demo, not for horizontal scale.
 
 ## Project layout
 
 ```
 shared/         event schema + decoder (the contract; framework-free)
-server/         normalizer, session/SSE layer, SDK + mock runners, prompts
+server/         normalizer, session/SSE layer, SDK + mock runners, persistence, prompts
 client/         React UI (Vite)
-tests/          decoder unit tests + full-fixture integration tests
+tests/          decoder + normalizer + persistence unit tests, full-fixture integration test
 fixtures/       recorded SDK runs (mock-mode input, test data)
 scripts/        capture + smoke scripts used to record fixtures
 docs/           design doc, SDK notes
+data/           persisted session event logs (gitignored, created at runtime)
 ```

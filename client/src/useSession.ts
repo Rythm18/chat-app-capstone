@@ -41,10 +41,37 @@ async function post(url: string, body: unknown): Promise<Response> {
   return res;
 }
 
+const SESSION_KEY = "deepAnalyst.sessionId";
+
+function readStoredSessionId(): string | null {
+  try {
+    return localStorage.getItem(SESSION_KEY);
+  } catch {
+    return null; // private mode / storage disabled
+  }
+}
+
+function rememberSessionId(id: string) {
+  try {
+    localStorage.setItem(SESSION_KEY, id);
+  } catch {
+    /* non-fatal */
+  }
+}
+
 let sessionPromise: Promise<{ sessionId: string; mock: boolean }> | null = null;
 
+// Resume the previously-used session if the server still knows it (survives
+// page reloads and server restarts via persistence); otherwise the server
+// creates a fresh one and we remember its id.
 function getOrCreateSession() {
-  sessionPromise ??= post("/api/sessions", {}).then((res) => res.json());
+  sessionPromise ??= (async () => {
+    const stored = readStoredSessionId();
+    const res = await post("/api/sessions", stored ? { resume: stored } : {});
+    const data = (await res.json()) as { sessionId: string; mock: boolean };
+    rememberSessionId(data.sessionId);
+    return data;
+  })();
   return sessionPromise;
 }
 
