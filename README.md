@@ -87,7 +87,9 @@ The same app runs on two different agent SDKs, selected by `ENGINE`, because bot
 | Model | Anthropic only | any LiteLLM model (here: OpenHands proxy) |
 | Normalizer | `server/normalize.ts` | the sidecar emits normalized events directly |
 
-**The OpenHands sidecar.** OpenHands ships only a Python SDK, so `server/openhands-runner.ts` spawns `agent/openhands_runner.py` as a child process and exchanges JSON lines over stdio — the same boundary the Claude SDK uses internally (it spawns a `claude` binary). The sidecar emits the exact same `AgentEventBody` objects the Claude normalizer produces, so `ChatSession`, SSE, persistence, the decoder, the UI, and the tests are all unchanged. The orchestration (scope → 2 parallel researchers → analyst → writer) is Python-driven for determinism across models, but **each node is a genuine OpenHands `Agent` + `Conversation`** doing real tool use. The `ask_user` pause lives in the sidecar and resumes when an answer is forwarded to its stdin.
+**The OpenHands sidecar.** OpenHands ships only a Python SDK, so `server/openhands-runner.ts` spawns `agent/openhands_runner.py` as a child process and exchanges JSON lines over stdio — the same boundary the Claude SDK uses internally (it spawns a `claude` binary). The sidecar emits the exact same `AgentEventBody` objects the Claude normalizer produces, so `ChatSession`, SSE, persistence, the decoder, the UI, and the tests are all unchanged.
+
+Orchestration is **autonomous and model-driven**, like the Claude engine: the lead is a real OpenHands agent that decides on its own to ask the scoping question (via a custom `ask_user` tool) and to delegate — including **how many researchers to spawn** (it picks per topic, capped at 5) — through the SDK's `task` tool, then the analyst and writer. A custom `ConversationVisualizer` maps each conversation's events to our schema; the SDK calls `create_sub_visualizer(label)` per spawned sub-agent, so every sub-agent's events arrive tagged. Lifecycle signals: that callback = spawn, the builtin `finish` tool = done, with an end-of-run sweep closing any straggler. The `ask_user` pause lives in the sidecar and resumes when an answer is forwarded to its stdin.
 
 `agent/openhands_runner.py --selftest` emits a scripted run (no LLM) that exercises every normalized event type, used to validate the bridge without spending tokens.
 
@@ -105,7 +107,7 @@ npm run typecheck
 
 ## The agents
 
-Adapted from [Anthropic's research-agent demo](https://github.com/anthropics/claude-agent-sdk-demos/tree/main/research-agent) (permitted by the assignment), rewritten for markdown deliverables and a deterministic scoping question. Prompts live in `server/prompts/`.
+Adapted from [Anthropic's research-agent demo](https://github.com/anthropics/claude-agent-sdk-demos/tree/main/research-agent), rewritten for markdown deliverables and a deterministic scoping question. Prompts live in `server/prompts/`.
 
 | Agent | Model | Tools | Role |
 |---|---|---|---|

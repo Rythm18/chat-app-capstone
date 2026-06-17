@@ -430,10 +430,12 @@ _LEAD_PROMPT = (
     "you only ask one scoping question and then delegate.\n"
     "STEP 1: Call the ask_user tool exactly ONCE with a scoping question (2-4 concrete options) "
     "about which angle of the topic matters most.\n"
-    "STEP 2: Using the task tool, delegate to TWO 'researcher' subagents IN PARALLEL (two task "
-    "calls in the SAME message), each with a distinct subtopic shaped by the chosen angle. Give "
-    "each a short 3-5 word description and a clear prompt to research and save notes.\n"
-    "STEP 3: After both researchers finish, delegate to ONE 'data-analyst' subagent.\n"
+    "STEP 2: Decide how many distinct subtopics the request genuinely warrants — as few or as many "
+    "as the topic needs, but NEVER more than 5. Using the task tool, delegate to that many "
+    "'researcher' subagents IN PARALLEL (one task call each, all in the SAME message), each with a "
+    "distinct subtopic shaped by the chosen angle. Give each a short 3-5 word description and a "
+    "clear prompt to research and save notes.\n"
+    "STEP 3: After ALL researchers finish, delegate to ONE 'data-analyst' subagent.\n"
     "STEP 4: Then delegate to ONE 'report-writer' subagent.\n"
     "STEP 5: Finish with a 3-5 bullet summary of the key findings.\n"
     "Keep your own messages short. Always use the tools; never produce research content yourself."
@@ -467,7 +469,7 @@ def run_live(inbox: Inbox) -> None:
 
         lead = Agent(llm=_llm("LLM_MODEL"),
                      tools=[Tool(name=TaskToolSet.name), Tool(name=ask_user_name)],
-                     system_prompt=_LEAD_PROMPT, tool_concurrency_limit=2)
+                     system_prompt=_LEAD_PROMPT, tool_concurrency_limit=5)
         Emitter = _emitter_class()
         conversation = Conversation(
             agent=lead, workspace=os.getcwd(),
