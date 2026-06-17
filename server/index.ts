@@ -10,6 +10,7 @@
  * Mock mode (no API spend, replays a recorded run): MOCK=1 npm run dev,
  * or per-session with POST /api/sessions {"mock": true}.
  */
+import "dotenv/config"; // load .env (LLM_API_KEY/LLM_BASE_URL/LLM_MODEL); no-op if absent
 import express from "express";
 import cors from "cors";
 import { mkdirSync, readFileSync, existsSync } from "node:fs";

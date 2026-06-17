@@ -9,7 +9,8 @@
     "test": "vitest run",
     "capture": "tsx scripts/capture-run.ts",
     "dev:client": "vite --config client/vite.config.ts client",
-    "typecheck": "tsc --noEmit && tsc -p client --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p client --noEmit",
+    "dev:server:claude": "ENGINE=claude tsx watch server/index.ts"
   },
   "repository": {
     "type": "git",
@@ -27,6 +28,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.3.173",
     "cors": "^2.8.6",
     "dompurify": "^3.4.9",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "marked": "^18.0.5",
     "react": "^19.2.7",

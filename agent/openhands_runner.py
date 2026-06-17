@@ -34,6 +34,10 @@ from typing import Any
 
 
 # --- stdout: thread-safe, line-buffered emit of normalized event bodies -----
+# The OpenHands SDK prints Rich UI to stdout, which would corrupt our JSON
+# protocol. We capture the real stdout here for emit() and later point
+# sys.stdout at stderr so any library output is logged, not parsed.
+_OUT = sys.stdout
 _emit_lock = threading.Lock()
 
 
@@ -42,8 +46,8 @@ def emit(body: dict[str, Any]) -> None:
     parallel sub-agents (separate threads) can't interleave a line."""
     line = json.dumps(body, ensure_ascii=False)
     with _emit_lock:
-        sys.stdout.write(line + "\n")
-        sys.stdout.flush()
+        _OUT.write(line + "\n")
+        _OUT.flush()
 
 
 # --- stdin: a background reader dispatches inbound messages -----------------
@@ -204,27 +208,245 @@ def run_selftest(inbox: Inbox) -> None:
           "resultText": "Research complete (self-test).", "durationMs": 0, "numTurns": 0, "costUsd": None})
 
 
+# =========================================================================
+# Live OpenHands pipeline
+#
+# Genuine OpenHands agents (Agent + Conversation + tools, on the model behind
+# LLM_BASE_URL) do the work; orchestration is Python-driven for determinism
+# across models. Each node is a real OpenHands Conversation whose callback
+# maps OpenHands events -> our normalized schema, tagged with the node id.
+# =========================================================================
+import os
+import re
+
+
+def to_workspace_path(path: str) -> str:
+    """Make an agent's file path workspace-relative so the Node artifact
+    endpoint (which serves from the session workspace) can resolve it."""
+    cwd = os.getcwd()
+    try:
+        rel = os.path.relpath(path, cwd)
+    except ValueError:
+        return path
+    return path if rel.startswith("..") else rel
+
+
+def _llm(model_env: str):
+    from pydantic import SecretStr
+    from openhands.sdk import LLM
+    return LLM(
+        usage_id=model_env,
+        model=os.environ[model_env] if model_env in os.environ else os.environ["LLM_MODEL"],
+        base_url=os.environ.get("LLM_BASE_URL"),
+        api_key=SecretStr(os.environ["LLM_API_KEY"]),
+    )
+
+
+def _complete_json(llm, prompt: str) -> Any:
+    """One-shot completion expected to return JSON; tolerant of code fences."""
+    from openhands.sdk.llm import Message, TextContent, content_to_str
+    resp = llm.completion(messages=[Message(role="user", content=[TextContent(text=prompt)])])
+    text = "".join(content_to_str(resp.message.content)).strip()
+    match = re.search(r"\{.*\}|\[.*\]", text, re.DOTALL)
+    try:
+        return json.loads(match.group(0) if match else text)
+    except Exception:
+        return None
+
+
+def _make_callback(node_id: str):
+    """Map this conversation's OpenHands events to normalized events tagged
+    with node_id. Per-node tool tracking lives in this closure (one callback
+    per conversation), so parallel sub-agents never share state."""
+    from openhands.sdk.event import ActionEvent, ObservationEvent, MessageEvent, AgentErrorEvent
+    from openhands.sdk.llm import content_to_str
+
+    pending: dict[str, dict] = {}  # tool_call_id -> {tool, input}
+
+    def cb(event: Any) -> None:
+        if isinstance(event, ActionEvent):
+            thought = "".join(content_to_str(list(event.thought))).strip()
+            if thought:
+                emit({"type": "thinking", "agentId": node_id, "text": thought})
+            try:
+                args = json.loads(event.tool_call.arguments)
+            except Exception:
+                args = {}
+            pending[event.tool_call_id] = {"tool": event.tool_name, "input": args}
+            emit({"type": "tool_start", "agentId": node_id, "toolUseId": event.tool_call_id,
+                  "tool": event.tool_name, "input": args})
+        elif isinstance(event, ObservationEvent):
+            call = pending.pop(event.tool_call_id, {"tool": event.tool_name, "input": {}})
+            output = "".join(content_to_str(event.observation.to_llm_content))
+            emit({"type": "tool_end", "agentId": node_id, "toolUseId": event.tool_call_id,
+                  "tool": event.tool_name, "output": output[:16000],
+                  "outputTruncated": len(output) > 16000, "isError": False})
+            # a successful file create is an artifact
+            path = call["input"].get("path") or call["input"].get("file_path")
+            command = call["input"].get("command")
+            if isinstance(path, str) and command in ("create", "write", None) and "file" in call["tool"].lower():
+                rel = to_workspace_path(path)
+                emit({"type": "artifact", "agentId": node_id, "path": rel,
+                      "name": rel.split("/")[-1], "sizeBytes": len(call["input"].get("file_text", "") or "")})
+        elif isinstance(event, MessageEvent) and event.source == "agent":
+            text = "".join(content_to_str(event.llm_message.content)).strip()
+            if text:
+                emit({"type": "response", "agentId": node_id, "text": text})
+        elif isinstance(event, AgentErrorEvent):
+            emit({"type": "error", "agentId": node_id, "source": "agent",
+                  "message": getattr(event, "error", str(event))})
+
+    return cb
+
+
+def _run_agent(node_id: str, agent_type: str, description: str,
+               system_prompt: str, task: str, tool_names: list[str],
+               model_env: str, max_iter: int = 12) -> str:
+    """Run one OpenHands agent to completion as a tree node. Returns its final text."""
+    from openhands.sdk import Agent, Conversation, Tool
+
+    agent = Agent(llm=_llm(model_env),
+                  tools=[Tool(name=n) for n in tool_names],
+                  system_prompt=system_prompt)
+    conversation = Conversation(
+        agent=agent, workspace=os.getcwd(),
+        callbacks=[_make_callback(node_id)],
+        visualizer=None, max_iteration_per_run=max_iter,
+    )
+    conversation.send_message(task)
+    conversation.run()
+    from openhands.sdk.conversation.response_utils import get_agent_final_response
+    return get_agent_final_response(conversation.state.events) or ""
+
+
 def run_live(inbox: Inbox) -> None:
-    """Live OpenHands pipeline. Wired once the OpenHands model credentials
-    authenticate, so the event mapping is validated against real OpenHands
-    events rather than guessed. Emits a clear error until then."""
-    text = inbox.next_message()
-    emit({
-        "type": "error", "agentId": "root", "source": "server",
-        "message": (
-            "OpenHands live engine not yet enabled: the provided OpenHands key "
-            "did not authenticate against the LLM proxy. Confirm base URL, model, "
-            "and key type, then the live pipeline can be activated."
-        ),
-    })
-    emit({"type": "done", "agentId": "root", "status": "error",
-          "resultText": "Live engine unavailable.", "durationMs": 0, "numTurns": 0, "costUsd": None})
+    topic = inbox.next_message()
+    if topic is None:
+        return
+
+    from openhands.tools.terminal import TerminalTool
+    from openhands.tools.file_editor import FileEditorTool
+    research_tools = [TerminalTool.name, FileEditorTool.name]
+
+    lead_llm = _llm("LLM_MODEL")
+    emit({"type": "session_init", "agentId": "root",
+          "sessionId": os.environ.get("LLM_MODEL", "openhands"),
+          "model": os.environ.get("LLM_MODEL", "openhands"),
+          "agentTypes": ["researcher", "data-analyst", "report-writer"]})
+
+    # --- lead: scope, then decompose -------------------------------------
+    emit({"type": "thinking", "agentId": "root", "text": f"Scoping the request: {topic}"})
+    scope = _complete_json(lead_llm, (
+        "You are a research lead. For the request below, produce ONE scoping question "
+        "with 2-4 concrete answer options. Reply ONLY as JSON: "
+        '{"question": "...", "header": "Focus", "options": [{"label":"...","description":"..."}]}\n\n'
+        f"Request: {topic}"))
+    if not scope or "question" not in scope:
+        scope = {"question": "Which angle matters most for your research?",
+                 "header": "Focus area",
+                 "options": [{"label": "Overview", "description": "Broad survey"},
+                             {"label": "Deep technical", "description": "Mechanisms and detail"}]}
+    qid = "scope-1"
+    emit({"type": "ask_user", "agentId": "root", "questionId": qid, "questions": [
+        {"question": scope["question"], "header": scope.get("header", "Focus"),
+         "multiSelect": False, "options": scope["options"]}]})
+    answers = inbox.wait_for_answer(qid)
+    if inbox.interrupted:
+        return
+    angle = next(iter(answers.values()), scope["options"][0]["label"])
+    emit({"type": "response", "agentId": "root",
+          "text": f"Focusing on {angle}. Decomposing into subtopics."})
+
+    plan = _complete_json(lead_llm, (
+        f"Research request: {topic}\nChosen angle: {angle}\n"
+        "Break this into exactly 2 focused, distinct research subtopics. "
+        'Reply ONLY as JSON: {"subtopics": ["...", "..."]}'))
+    subtopics = (plan or {}).get("subtopics") or [f"{topic} — overview", f"{topic} — current developments"]
+    subtopics = subtopics[:2]
+
+    # --- researchers in parallel -----------------------------------------
+    researchers = [(f"researcher-{i+1}", st) for i, st in enumerate(subtopics)]
+    for cid, st in researchers:
+        emit({"type": "agent_queued", "agentId": "root", "childId": cid,
+              "agentType": "researcher", "description": st, "prompt": st})
+
+    errors: dict[str, str] = {}
+
+    def run_researcher(cid: str, subtopic: str) -> None:
+        emit({"type": "agent_start", "agentId": "root", "childId": cid,
+              "agentType": "researcher", "description": subtopic, "prompt": subtopic})
+        try:
+            _run_agent(
+                cid, "researcher", subtopic,
+                system_prompt=(
+                    "You are a focused web researcher. Use the terminal (curl) to gather "
+                    "information and the file editor to save concise markdown findings. "
+                    "Keep it brief: 1-2 fetches, then write your notes."),
+                task=(f"Research this subtopic: {subtopic}\n"
+                      f"Save your findings to files/research_notes/{cid}.md as markdown. "
+                      "Be concise."),
+                tool_names=research_tools, model_env="LLM_MODEL_SUB", max_iter=10)
+            emit({"type": "agent_end", "agentId": cid, "status": "completed",
+                  "resultText": f"Research on '{subtopic}' complete."})
+        except Exception as exc:
+            errors[cid] = str(exc)
+            emit({"type": "agent_end", "agentId": cid, "status": "failed", "resultText": str(exc)})
+
+    threads = [threading.Thread(target=run_researcher, args=(cid, st)) for cid, st in researchers]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    if inbox.interrupted:
+        return
+
+    # --- analyst, then writer (sequential after parallel) ----------------
+    analyst_id = "data-analyst-1"
+    emit({"type": "agent_start", "agentId": "root", "childId": analyst_id,
+          "agentType": "data-analyst", "description": "Extract data and comparisons", "prompt": ""})
+    try:
+        _run_agent(
+            analyst_id, "data-analyst", "Extract data and comparisons",
+            system_prompt=("You are a data analyst. Read the research notes and extract key "
+                           "quantitative points and comparisons into a concise markdown summary."),
+            task=("Read all files in files/research_notes/, then write a concise markdown data "
+                  "summary with any comparison tables to files/data/data_summary.md."),
+            tool_names=research_tools, model_env="LLM_MODEL_SUB", max_iter=10)
+        emit({"type": "agent_end", "agentId": analyst_id, "status": "completed", "resultText": "Data summary written."})
+    except Exception as exc:
+        emit({"type": "agent_end", "agentId": analyst_id, "status": "failed", "resultText": str(exc)})
+
+    writer_id = "report-writer-1"
+    emit({"type": "agent_start", "agentId": "root", "childId": writer_id,
+          "agentType": "report-writer", "description": "Write final research brief", "prompt": ""})
+    final_text = ""
+    try:
+        final_text = _run_agent(
+            writer_id, "report-writer", "Write final research brief",
+            system_prompt=("You are a report writer. Synthesize the research notes and data summary "
+                           "into a clear, well-structured markdown research brief."),
+            task=("Read files/research_notes/ and files/data/data_summary.md, then write a "
+                  "comprehensive markdown research brief to files/reports/research_brief.md. "
+                  "End your reply with a 3-5 bullet summary of the key findings."),
+            tool_names=research_tools, model_env="LLM_MODEL_SUB", max_iter=12)
+        emit({"type": "agent_end", "agentId": writer_id, "status": "completed", "resultText": "Brief written."})
+    except Exception as exc:
+        emit({"type": "agent_end", "agentId": writer_id, "status": "failed", "resultText": str(exc)})
+
+    emit({"type": "response", "agentId": "root",
+          "text": final_text or "Research complete. See the brief and artifacts."})
+    emit({"type": "done", "agentId": "root", "status": "success",
+          "resultText": final_text or "Research complete.", "durationMs": 0, "numTurns": 0, "costUsd": None})
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--selftest", action="store_true")
     args = parser.parse_args()
+
+    # Protect the JSON protocol: any SDK/library output goes to stderr.
+    os.environ.setdefault("OPENHANDS_SUPPRESS_BANNER", "1")
+    sys.stdout = sys.stderr
 
     inbox = Inbox()
     inbox.start()

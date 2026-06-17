@@ -2,23 +2,55 @@
 
 A chat application with the engine cover off. You ask a research question; a lead agent decomposes it, pauses to ask you a scoping question, dispatches researcher sub-agents **in parallel**, then runs a data analyst and a report writer — and the UI shows every thinking step, tool call, sub-agent lifecycle, and artifact **live**, as a growing execution trace.
 
-Built on the [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) for the agent-transparent chat capstone (Domain A: "Deep Analyst"). The one-page design document is at [docs/DESIGN.md](docs/DESIGN.md).
+Built for the agent-transparent chat capstone (Domain A: "Deep Analyst"). The one-page design document is at [docs/DESIGN.md](docs/DESIGN.md).
+
+**Two interchangeable agent engines, one app.** The entire backend, decoder, UI, and tests are engine-agnostic because everything downstream consumes a single normalized event schema (`shared/events.ts`). A run can be driven by:
+
+- **OpenHands SDK** (default) — the open-source agent SDK, on any model via its LiteLLM proxy. Runs as a Python sidecar.
+- **Claude Agent SDK** — `ENGINE=claude`.
+- **Mock replay** — a recorded run, no API cost.
+
+Swapping engines touches only the runner + normalizer; the decoder/UI/tests don't change. See [the engines section](#agent-engines) below.
 
 ## Quick start
 
-Prerequisites: Node 20+, and either a logged-in Claude CLI (`claude login` — keychain auth is picked up automatically) or `ANTHROPIC_API_KEY` exported.
+Prerequisites: Node 20+. Python 3.12+ and [`uv`](https://docs.astral.sh/uv/) only if you run the OpenHands engine.
 
 ```bash
 npm install
 
 # terminal 1 — backend (live agents)
-npm run dev:server
+npm run dev:server          # OpenHands engine (default) — needs .env, see below
+# or:  npm run dev:server:claude   # Claude Agent SDK engine
+# or:  MOCK=1 npm run dev:server    # recorded replay, no key, no cost
 
 # terminal 2 — frontend
 npm run dev:client
 ```
 
-Open the URL Vite prints (default `http://localhost:5173`). Send a research question; a live run takes ~4–6 minutes and bills your Anthropic account (roughly $0.50–1.00 per run).
+Open the URL Vite prints (default `http://localhost:5173`).
+
+### OpenHands engine setup (default)
+
+```bash
+uv venv agent/.venv --python 3.12
+VIRTUAL_ENV=agent/.venv uv pip install -r agent/requirements.txt
+```
+
+Create `.env` with an OpenHands LLM proxy key (any LiteLLM-supported model works):
+
+```
+LLM_API_KEY=sk-...
+LLM_BASE_URL=https://llm-proxy.app.all-hands.dev
+LLM_MODEL=litellm_proxy/claude-sonnet-4-6
+LLM_MODEL_SUB=litellm_proxy/claude-haiku-4-5-20251001
+```
+
+A live run takes a few minutes; cost depends on the model (sub-agents use the cheaper `LLM_MODEL_SUB`).
+
+### Claude engine
+
+`ENGINE=claude npm run dev:server` — needs a logged-in Claude CLI (`claude login`) or `ANTHROPIC_API_KEY`.
 
 ### Mock mode — no API cost
 
@@ -63,6 +95,22 @@ Raw observations from the recorded runs are in [docs/notes/sdk-event-observation
 - **Parallel visualization** — children whose lifetimes overlap (by timestamp) are grouped into a "wave" and rendered side-by-side under a `∥ PARALLEL` badge; the grouping is derived from data, so it survives completion and replay.
 - **Artifacts** — derived from successful `Write` calls, deduped by path (latest wins), attributed to the producing agent, served only from inside the session's workspace (path-traversal guarded). The final brief renders inline in the chat.
 - **Stop & retry** — a running trace shows a STOP button (`query.interrupt()`, with a synthetic terminal event as a fallback); a failed or interrupted run shows a RERUN button that re-submits the original request as a fresh run.
+
+## Agent engines
+
+The same app runs on two different agent SDKs, selected by `ENGINE`, because both are normalized into the same event schema before anything downstream sees them. This is the clean-boundary design paying off — swapping the entire agent engine, across two languages, touches only the runner and the normalizer.
+
+| | Claude Agent SDK (`ENGINE=claude`) | OpenHands SDK (`ENGINE=openhands`, default) |
+|---|---|---|
+| Language | TypeScript (in-process) | Python (sidecar child process) |
+| How it runs | `query()` async generator | `Conversation` + callbacks |
+| Sub-agents | `Task` tool, `parent_tool_use_id` | separate `Conversation`s, tagged by id |
+| Model | Anthropic only | any LiteLLM model (here: OpenHands proxy) |
+| Normalizer | `server/normalize.ts` | the sidecar emits normalized events directly |
+
+**The OpenHands sidecar.** OpenHands ships only a Python SDK, so `server/openhands-runner.ts` spawns `agent/openhands_runner.py` as a child process and exchanges JSON lines over stdio — the same boundary the Claude SDK uses internally (it spawns a `claude` binary). The sidecar emits the exact same `AgentEventBody` objects the Claude normalizer produces, so `ChatSession`, SSE, persistence, the decoder, the UI, and the tests are all unchanged. The orchestration (scope → 2 parallel researchers → analyst → writer) is Python-driven for determinism across models, but **each node is a genuine OpenHands `Agent` + `Conversation`** doing real tool use. The `ask_user` pause lives in the sidecar and resumes when an answer is forwarded to its stdin.
+
+`agent/openhands_runner.py --selftest` emits a scripted run (no LLM) that exercises every normalized event type, used to validate the bridge without spending tokens.
 
 ## Tests
 
