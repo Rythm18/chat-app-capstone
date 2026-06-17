@@ -19,14 +19,16 @@ PROTOCOL
     {"type": "agent_start", "agentId": "root", "childId": "researcher-1", ...}
 
 MODES
-  --selftest : emit a scripted multi-agent run (no LLM, no network). Proves the
-               whole pipe end-to-end and exercises every normalized event type,
-               including a real ask_user pause that blocks for a stdin answer.
-  (default)  : run the live OpenHands pipeline — wired in once the OpenHands
-               model credentials authenticate (see emit_live()).
+  (default)  : run the live OpenHands pipeline (run_live) — real OpenHands
+               agents scope, research in parallel, analyze, and write.
+  --selftest : emit a scripted multi-agent run (no LLM, no network) that
+               exercises every normalized event type; used to validate the
+               Node bridge without spending tokens.
 """
 import sys
 import json
+import os
+import re
 import threading
 import time
 import argparse
@@ -216,8 +218,6 @@ def run_selftest(inbox: Inbox) -> None:
 # across models. Each node is a real OpenHands Conversation whose callback
 # maps OpenHands events -> our normalized schema, tagged with the node id.
 # =========================================================================
-import os
-import re
 
 
 def to_workspace_path(path: str) -> str:
@@ -370,8 +370,6 @@ def run_live(inbox: Inbox) -> None:
         emit({"type": "agent_queued", "agentId": "root", "childId": cid,
               "agentType": "researcher", "description": st, "prompt": st})
 
-    errors: dict[str, str] = {}
-
     def run_researcher(cid: str, subtopic: str) -> None:
         emit({"type": "agent_start", "agentId": "root", "childId": cid,
               "agentType": "researcher", "description": subtopic, "prompt": subtopic})
@@ -389,7 +387,6 @@ def run_live(inbox: Inbox) -> None:
             emit({"type": "agent_end", "agentId": cid, "status": "completed",
                   "resultText": f"Research on '{subtopic}' complete."})
         except Exception as exc:
-            errors[cid] = str(exc)
             emit({"type": "agent_end", "agentId": cid, "status": "failed", "resultText": str(exc)})
 
     threads = [threading.Thread(target=run_researcher, args=(cid, st)) for cid, st in researchers]
