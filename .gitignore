@@ -11,3 +11,4 @@ docs/learn/
 agent/.venv/
 .env
 .env.*
+!.env.example

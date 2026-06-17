@@ -14,51 +14,30 @@ Swapping engines touches only the runner + normalizer; the decoder/UI/tests don'
 
 ## Quick start
 
-Prerequisites: Node 20+. Python 3.12+ and [`uv`](https://docs.astral.sh/uv/) only if you run the OpenHands engine.
+Prerequisites: Node 20+. Plus Python 3.12 and [`uv`](https://docs.astral.sh/uv/) for the OpenHands engine.
 
 ```bash
+# 1. install JS deps
 npm install
 
-# terminal 1 — backend (live agents)
-npm run dev:server          # OpenHands engine (default) — needs .env, see below
-# or:  npm run dev:server:claude   # Claude Agent SDK engine
-# or:  MOCK=1 npm run dev:server    # recorded replay, no key, no cost
-
-# terminal 2 — frontend
-npm run dev:client
-```
-
-Open the URL Vite prints (default `http://localhost:5173`).
-
-### OpenHands engine setup (default)
-
-```bash
+# 2. OpenHands engine (default): Python venv + key
 uv venv agent/.venv --python 3.12
 VIRTUAL_ENV=agent/.venv uv pip install -r agent/requirements.txt
+cp .env.example .env          # then put your OpenHands key in LLM_API_KEY
+
+# 3. run (two terminals)
+npm run dev:server            # backend
+npm run dev:client            # frontend → open the URL it prints
 ```
 
-Create `.env` with an OpenHands LLM proxy key (any LiteLLM-supported model works):
+Get a key at [app.all-hands.dev](https://app.all-hands.dev) (Settings → API). Any LiteLLM model works; sub-agents use the cheaper `LLM_MODEL_SUB`.
 
-```
-LLM_API_KEY=sk-...
-LLM_BASE_URL=https://llm-proxy.app.all-hands.dev
-LLM_MODEL=litellm_proxy/claude-sonnet-4-6
-LLM_MODEL_SUB=litellm_proxy/claude-haiku-4-5-20251001
-```
-
-A live run takes a few minutes; cost depends on the model (sub-agents use the cheaper `LLM_MODEL_SUB`).
-
-### Claude engine
-
-`ENGINE=claude npm run dev:server` — needs a logged-in Claude CLI (`claude login`) or `ANTHROPIC_API_KEY`.
-
-### Mock mode — no API cost
+**Other engines** (skip the Python/key setup):
 
 ```bash
-MOCK=1 npm run dev:server
+MOCK=1 npm run dev:server     # recorded replay — no key, no cost
+ENGINE=claude npm run dev:server   # Claude Agent SDK — needs `claude login` or ANTHROPIC_API_KEY
 ```
-
-Replays a complete recorded multi-agent run (`fixtures/run-001.jsonl`, 468 real SDK events) through the exact same normalizer → SSE → decoder pipeline, compressed to ~1 minute. The ask_user pause is genuinely interactive — the replay blocks until you answer in the browser. `MOCK_SPEED=4` to go faster.
 
 ## Architecture
 
