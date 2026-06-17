@@ -17,6 +17,7 @@ import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ChatSession, SessionStore } from "./sessions.js";
 import { SdkAgentRunner } from "./agent-runner.js";
+import { OpenHandsRunner } from "./openhands-runner.js";
 import { MockAgentRunner, MOCK_WORKSPACE } from "./mock-runner.js";
 import { SessionLog, loadPersistedSessions } from "./persistence.js";
 
@@ -24,6 +25,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_DIR = join(ROOT, "data");
 const PORT = Number(process.env.PORT ?? 3001);
 const MOCK_DEFAULT = process.env.MOCK === "1";
+// Which live engine to run: the OpenHands Python sidecar or the Claude SDK.
+const ENGINE = (process.env.ENGINE ?? "openhands").toLowerCase();
 
 const app = express();
 app.use(cors());
@@ -32,9 +35,13 @@ app.use(express.json());
 const store = new SessionStore();
 
 function attachRunnerFor(session: ChatSession) {
-  session.attachRunner(
-    session.mock ? new MockAgentRunner(session) : new SdkAgentRunner(session),
-  );
+  if (session.mock) {
+    session.attachRunner(new MockAgentRunner(session));
+  } else if (ENGINE === "claude") {
+    session.attachRunner(new SdkAgentRunner(session));
+  } else {
+    session.attachRunner(new OpenHandsRunner(session));
+  }
 }
 
 /** Create a fresh persisted session with a live runner attached. */
@@ -149,9 +156,9 @@ app.get("/api/sessions/:id/artifacts", (req, res) => {
 });
 
 app.listen(PORT, () => {
+  const mode = MOCK_DEFAULT ? "MOCK replay" : `LIVE (${ENGINE})`;
   console.log(
-    `agent-chat server on http://localhost:${PORT} ` +
-      `(default mode: ${MOCK_DEFAULT ? "MOCK replay" : "LIVE SDK"}` +
+    `agent-chat server on http://localhost:${PORT} (default mode: ${mode}` +
       `${restored ? `, restored ${restored} session${restored === 1 ? "" : "s"}` : ""})`,
   );
 });

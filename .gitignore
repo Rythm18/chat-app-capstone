@@ -8,3 +8,6 @@ docs/ASSIGNMENT.md
 docs/screenshots/
 docs/learn/
 /data/
+agent/.venv/
+.env
+.env.*

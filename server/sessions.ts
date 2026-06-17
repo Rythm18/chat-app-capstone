@@ -25,6 +25,10 @@ export interface AgentRunner {
   send(text: string): void;
   /** Stop the current run; the session stays usable for new messages. */
   interrupt(): void | Promise<void>;
+  /** Forward an ask_user answer to the runner. Implemented when the pause
+   *  lives inside the runner (the OpenHands sidecar) rather than a Node-side
+   *  promise (Claude/mock, which use askUser/pendingQuestions instead). */
+  answer?(questionId: string, answers: Record<string, string>): void;
   close(): void;
 }
 
@@ -168,19 +172,24 @@ export class ChatSession {
     }, 5000).unref?.();
   }
 
-  /** Resolve a pending ask_user question. Returns false if unknown id. */
+  /** Resolve a pending ask_user question. Two paths: a Node-side pause
+   *  (Claude/mock) resolves a stored promise; a runner-side pause (OpenHands
+   *  sidecar) forwards the answer to the runner. Returns false if neither
+   *  applies. */
   answerQuestion(questionId: string, answers: Record<string, string>): boolean {
     const pending = this.pendingQuestions.get(questionId);
-    if (!pending) return false;
-    this.pendingQuestions.delete(questionId);
-    this.emit({
-      type: "ask_user_answered",
-      agentId: pending.agentId,
-      questionId,
-      answers,
-    });
-    pending.resolve(answers);
-    return true;
+    if (pending) {
+      this.pendingQuestions.delete(questionId);
+      this.emit({ type: "ask_user_answered", agentId: pending.agentId, questionId, answers });
+      pending.resolve(answers);
+      return true;
+    }
+    if (this.runner?.answer) {
+      this.emit({ type: "ask_user_answered", agentId: "root", questionId, answers });
+      this.runner.answer(questionId, answers);
+      return true;
+    }
+    return false;
   }
 
   // -- outbound (to runner) ---------------------------------------------------
