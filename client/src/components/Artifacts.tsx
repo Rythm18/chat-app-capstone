@@ -6,8 +6,15 @@ import { Markdown } from "./Markdown";
 import { bytes } from "../format";
 
 /** The run's headline deliverable: the report the report-writer saved.
- *  Rendered inline in the chat rather than pointed at by path. */
+ *  Detected by its producing agent first (filename-independent — agents pick
+ *  their own names), falling back to a reports/-directory or report-name
+ *  heuristic. Rendered inline in the chat rather than pointed at by path. */
 export function reportArtifact(run: Run): Artifact | null {
+  const byAgent = run.artifacts.find((a) => {
+    const type = run.nodes[a.agentId]?.agentType.toLowerCase() ?? "";
+    return type.includes("writer") || type.includes("report");
+  });
+  if (byAgent) return byAgent;
   return (
     run.artifacts.find(
       (a) => /(^|\/)reports?\//i.test(a.path) || /^report.*\.md$/i.test(a.name),
