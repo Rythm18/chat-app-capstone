@@ -212,7 +212,13 @@ export class ChatSession {
     };
     if (event.type === "done") this.doneRunIds.add(event.runId);
     this.events.push(event);
-    this.persist?.(event);
+    // Durability is best-effort: a persistence failure must never break the
+    // in-memory log or the live SSE broadcast.
+    try {
+      this.persist?.(event);
+    } catch (err) {
+      console.error("[session] persist failed:", err);
+    }
     const frame = `id: ${event.seq}\nevent: agent_event\ndata: ${JSON.stringify(event)}\n\n`;
     for (const res of this.subscribers) {
       res.write(frame);

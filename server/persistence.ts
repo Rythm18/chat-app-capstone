@@ -31,17 +31,37 @@ export interface SessionMeta {
 /** Append-only log for one session. Writing the meta file is idempotent, so
  *  reopening an existing session's log on restore is safe. */
 export class SessionLog {
+  private dir: string;
+  private metaPath: string;
   private eventsPath: string;
+  private metaJson: string;
 
   constructor(dir: string, meta: SessionMeta) {
-    mkdirSync(dir, { recursive: true });
+    this.dir = dir;
+    this.metaPath = join(dir, `${meta.id}.meta.json`);
     this.eventsPath = join(dir, `${meta.id}.jsonl`);
-    writeFileSync(join(dir, `${meta.id}.meta.json`), JSON.stringify(meta, null, 2));
+    this.metaJson = JSON.stringify(meta, null, 2);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(this.metaPath, this.metaJson);
     if (!existsSync(this.eventsPath)) writeFileSync(this.eventsPath, "");
   }
 
+  /** Best-effort durable append. Self-heals if the data dir/file was removed
+   *  mid-run, and never throws — a persistence failure must not crash the
+   *  server or interrupt event delivery. */
   append(event: AgentEvent) {
-    appendFileSync(this.eventsPath, JSON.stringify(event) + "\n");
+    const line = JSON.stringify(event) + "\n";
+    try {
+      appendFileSync(this.eventsPath, line);
+    } catch {
+      try {
+        mkdirSync(this.dir, { recursive: true });
+        if (!existsSync(this.metaPath)) writeFileSync(this.metaPath, this.metaJson);
+        appendFileSync(this.eventsPath, line);
+      } catch (err) {
+        console.error(`[persistence] dropped one event for ${this.eventsPath}:`, err);
+      }
+    }
   }
 }
 

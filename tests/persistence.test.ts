@@ -64,6 +64,17 @@ describe("on-disk log round-trip", () => {
     const loaded = loadPersistedSessions(dir);
     expect(loaded[0].events).toHaveLength(1);
   });
+
+  it("self-heals if the data dir is removed mid-run (never throws)", () => {
+    const dir = tempDir();
+    const meta: SessionMeta = { id: "sess-C", workspaceDir: "/tmp/ws", mock: false, createdAt: "t" };
+    const log = new SessionLog(dir, meta);
+    log.append(ev({ type: "run_started", agentId: "root", userMessage: "x" }, 0));
+    rmSync(dir, { recursive: true, force: true }); // dir vanishes mid-run
+    expect(() => log.append(ev({ type: "thinking", agentId: "root", text: "still here" }, 1))).not.toThrow();
+    const loaded = loadPersistedSessions(dir);
+    expect(loaded[0].events.at(-1)).toMatchObject({ type: "thinking", text: "still here" });
+  });
 });
 
 describe("ChatSession.hydrate", () => {
